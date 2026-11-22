@@ -14,7 +14,7 @@
   "engines": {
     "node": ">=22.5"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
     "music-metadata": "^11.16.1",

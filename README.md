@@ -81,4 +81,4 @@ Die Pakete sind nicht signiert (nur Ad-hoc auf dem Mac). Beim ersten Start: Mac 
 
 ## Lizenz
 
-Noch nicht festgelegt (`UNLICENSED`): Alle Rechte liegen beim Autor. ffmpeg steht unter eigener Lizenz, die vor einer Weitergabe der Pakete zu beachten ist.
+MIT, siehe [LICENSE](LICENSE). Die ffmpeg-Programme, die in den fertigen Paketen stecken, stehen unter ihrer eigenen Lizenz (oft GPL), die vor einer Weitergabe der Pakete zu beachten ist.
