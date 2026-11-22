@@ -1,17 +1,16 @@
 # Drittanbieter
 
-## ffmpeg
+## ffmpeg (LGPL)
 
-Die Pakete (DMG, EXE, ZIP) enthalten ein eigenständiges `ffmpeg`-Programm, das DJ FLOW nur als externen Prozess zum Dekodieren von Audio aufruft. Es wird nicht in den Code von DJ FLOW eingebunden.
+Die Pakete (DMG, EXE, ZIP) enthalten ein eigenständiges `ffmpeg`-Programm. DJ FLOW startet es nur als externen Prozess zum Dekodieren von Audio und zum Umschreiben von FLAC-Tags und bindet es nicht in den eigenen Code ein. Alle Builds in den Releases sind **ohne** `--enable-gpl` und ohne `--enable-nonfree` gebaut und stehen unter der LGPL (v2.1 oder später). Der Workflow bricht ab, falls die Konfiguration eines dieser Flags enthält.
 
-- Die Releases auf GitHub nutzen die Binaries des npm-Pakets `ffmpeg-static` 5.2.0 (ffmpeg 6.1.1, Builds von eugeneware/ffmpeg-static). Diese Builds sind GPL-Builds (`--enable-gpl`).
-- Lizenz: GPL v3 (bzw. v2 oder später je nach Build), Text: https://www.gnu.org/licenses/gpl-3.0.html
-- Quellcode von ffmpeg: https://ffmpeg.org/download.html (Version 6.1.1) und https://github.com/eugeneware/ffmpeg-static
-- Projektseite: https://ffmpeg.org
+- **macOS:** schlanker Eigenbau aus dem unveränderten Quellcode von ffmpeg 6.1.1 (https://github.com/FFmpeg/FFmpeg/tree/n6.1.1), nur mit Decodern, ohne Encoder außer PCM. Das Build-Skript mit allen Optionen liegt in `build/ffmpeg-lgpl/build-mac.sh` in diesem Repository.
+- **Windows:** LGPL-Build aus https://github.com/BtbN/FFmpeg-Builds (Release `autobuild-2026-11-21-12-37`, ffmpeg n8.1.3). Quellcode und Build-Skripte dort.
+- Lizenztext der LGPL: https://www.gnu.org/licenses/lgpl-2.1.html, ffmpeg-Projekt: https://ffmpeg.org
 
-DJ FLOW selbst steht unter der MIT-Lizenz (siehe LICENSE). Das gilt nicht für das mitgelieferte ffmpeg.
+Du kannst das mitgelieferte ffmpeg durch ein eigenes ersetzen (Datei `ffmpeg` im Ordner `Resources` der App bzw. `ffmpeg.exe` im Ressourcenordner).
 
-Pakete, die du selbst mit einem eigenen ffmpeg baust, unterliegen den Lizenzen dieses ffmpeg. Ein Build mit `--enable-nonfree` darf nicht weitergegeben werden.
+DJ FLOW selbst steht unter der MIT-Lizenz (siehe LICENSE). Das gilt nicht für das mitgelieferte ffmpeg. Selbst gebaute Pakete mit einem anderen ffmpeg unterliegen dessen Lizenzen; ein Build mit `--enable-nonfree` darf nicht weitergegeben werden.
 
 ## npm-Pakete
 

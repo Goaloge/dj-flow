@@ -43,7 +43,7 @@ Die Pakete sind nicht signiert (nur Ad-hoc auf dem Mac). Beim ersten Start: Mac 
 ## Abhängigkeiten
 
 - **Node ≥ 22.5** für das eingebaute `node:sqlite` (die App bringt Electron 45 mit Node 24 mit)
-- **ffmpeg** zum Dekodieren: in den Paketen enthalten (`build/ffmpeg/`; die Releases auf GitHub nutzen `ffmpeg-static` 5.2.0 = ffmpeg 6.1.1, GPL-Build, siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Im Entwicklungsstart wird ein installiertes ffmpeg genutzt. Ohne ffmpeg fällt die App auf den Browser zurück, der bei manchen MP3s den Anfang verliert und dann neben dem Engine-Beatgrid liegt. Selbst gebaute Pakete nur mit einem ffmpeg ohne `--enable-nonfree` weitergeben.
+- **ffmpeg** zum Dekodieren: in den Paketen enthalten (`build/ffmpeg/`). Die Releases auf GitHub enthalten ein LGPL-ffmpeg (Mac: schlanker Eigenbau aus `build/ffmpeg-lgpl/build-mac.sh`, Windows: BtbN-LGPL-Build), siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Im Entwicklungsstart wird ein installiertes ffmpeg genutzt. Ohne ffmpeg fällt die App auf den Browser zurück, der bei manchen MP3s den Anfang verliert und dann neben dem Engine-Beatgrid liegt. Selbst gebaute Pakete nur mit einem ffmpeg ohne `--enable-nonfree` weitergeben.
 - **Stems:** `uv` oder Python 3.10 bis 3.12 und Internet bei der Einrichtung (bis ca. 2 GB). Demucs 4.1.0, PyTorch 2.7.1, läuft auf dem Apple-Grafikchip, sonst auf der CPU.
 - npm-Pakete: `music-metadata`, `node-id3`, `@breezystack/lamejs`
 
@@ -78,12 +78,12 @@ Die Pakete sind nicht signiert (nur Ad-hoc auf dem Mac). Beim ersten Start: Mac 
 
 ## Pakete selbst bauen
 
-`dist/` und die ffmpeg-Programme (`build/ffmpeg/`) liegen nicht im Repository. Zum Bauen der Pakete mit `npm run dist:mac` bzw. `npm run dist:win` die ffmpeg-Programme (z.B. ffmpeg-static) hier ablegen: `build/ffmpeg/mac/ffmpeg` und `build/ffmpeg/win/ffmpeg.exe`. Zum Entwickeln mit `npm start` genügt ein installiertes ffmpeg.
+`dist/` und die ffmpeg-Programme (`build/ffmpeg/`) liegen nicht im Repository. Zum Bauen der Pakete mit `npm run dist:mac` bzw. `npm run dist:win` die ffmpeg-Programme hier ablegen (LGPL-Build, z.B. mit `build/ffmpeg-lgpl/build-mac.sh`): `build/ffmpeg/mac/ffmpeg` und `build/ffmpeg/win/ffmpeg.exe`. Zum Entwickeln mit `npm start` genügt ein installiertes ffmpeg.
 
 ## Automatischer Build
 
-`.github/workflows/release.yml` baut bei einem Tag `v*` (z.B. `git tag v1.18.0 && git push --tags`) die Mac- und Windows-Pakete auf GitHub und hängt sie an ein Release. ffmpeg wird dabei per `ffmpeg-static` geholt. Manuell startbar unter Actions → Release (Pakete dann als Artefakt). Die Pakete sind nicht signiert.
+`.github/workflows/release.yml` baut bei einem Tag `v*` (z.B. `git tag v1.18.0 && git push --tags`) die Mac- und Windows-Pakete auf GitHub und hängt sie an ein Release. Das ffmpeg wird dabei als LGPL-Build erzeugt bzw. geholt und geprüft (kein `--enable-gpl`, kein `--enable-nonfree`). Manuell startbar unter Actions → Release (Pakete dann als Artefakt). Die Pakete sind nicht signiert.
 
 ## Lizenz
 
-MIT, siehe [LICENSE](LICENSE). Die ffmpeg-Programme, die in den fertigen Paketen stecken, stehen unter ihrer eigenen Lizenz (oft GPL), die vor einer Weitergabe der Pakete zu beachten ist.
+MIT, siehe [LICENSE](LICENSE). Das ffmpeg in den Paketen steht unter LGPL, siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
