@@ -80,6 +80,10 @@ Die Pakete sind nicht signiert (nur Ad-hoc auf dem Mac). Beim ersten Start: Mac 
 
 `dist/` und die ffmpeg-Programme (`build/ffmpeg/`) liegen nicht im Repository. Zum Bauen der Pakete mit `npm run dist:mac` bzw. `npm run dist:win` die ffmpeg-Programme (z.B. ffmpeg-static) hier ablegen: `build/ffmpeg/mac/ffmpeg` und `build/ffmpeg/win/ffmpeg.exe`. Zum Entwickeln mit `npm start` genügt ein installiertes ffmpeg.
 
+## Automatischer Build
+
+`.github/workflows/release.yml` baut bei einem Tag `v*` (z.B. `git tag v1.18.0 && git push --tags`) die Mac- und Windows-Pakete auf GitHub und hängt sie an ein Release. ffmpeg wird dabei per `ffmpeg-static` geholt. Manuell startbar unter Actions → Release (Pakete dann als Artefakt). Die Pakete sind nicht signiert.
+
 ## Lizenz
 
 MIT, siehe [LICENSE](LICENSE). Die ffmpeg-Programme, die in den fertigen Paketen stecken, stehen unter ihrer eigenen Lizenz (oft GPL), die vor einer Weitergabe der Pakete zu beachten ist.
