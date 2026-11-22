@@ -43,7 +43,7 @@ Die Pakete sind nicht signiert (nur Ad-hoc auf dem Mac). Beim ersten Start: Mac 
 ## Abhängigkeiten
 
 - **Node ≥ 22.5** für das eingebaute `node:sqlite` (die App bringt Electron 45 mit Node 24 mit)
-- **ffmpeg** zum Dekodieren: in den Paketen enthalten (`build/ffmpeg/`, ffmpeg-static b6.1.1). Im Entwicklungsstart wird ein installiertes ffmpeg genutzt. Ohne ffmpeg fällt die App auf den Browser zurück, der bei manchen MP3s den Anfang verliert und dann neben dem Engine-Beatgrid liegt. Lizenz vor einer Weitergabe klären.
+- **ffmpeg** zum Dekodieren: in den Paketen enthalten (`build/ffmpeg/`; die Releases auf GitHub nutzen `ffmpeg-static` 5.2.0 = ffmpeg 6.1.1, GPL-Build, siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Im Entwicklungsstart wird ein installiertes ffmpeg genutzt. Ohne ffmpeg fällt die App auf den Browser zurück, der bei manchen MP3s den Anfang verliert und dann neben dem Engine-Beatgrid liegt. Selbst gebaute Pakete nur mit einem ffmpeg ohne `--enable-nonfree` weitergeben.
 - **Stems:** `uv` oder Python 3.10 bis 3.12 und Internet bei der Einrichtung (bis ca. 2 GB). Demucs 4.1.0, PyTorch 2.7.1, läuft auf dem Apple-Grafikchip, sonst auf der CPU.
 - npm-Pakete: `music-metadata`, `node-id3`, `@breezystack/lamejs`
 
