@@ -22,7 +22,8 @@ stems.init(DATA);
 // ---------- Persistenz ----------
 const jsonFile = (name, def) => ({
   file: path.join(DATA, name),
-  load() { try { return JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch { return def; } },
+  // Fehlende Einstellungen mit Standardwerten auffüllen (sonst fehlt z.B. der Export-Ordner in einer alten oder leeren Datei)
+  load() { try { const v = JSON.parse(fs.readFileSync(this.file, 'utf8')); return def && !Array.isArray(def) && typeof def === 'object' && v && typeof v === 'object' ? { ...def, ...v } : v; } catch { return def; } },
   save(v) { fs.writeFileSync(this.file, JSON.stringify(v, null, 2)); },
 });
 const settingsStore = jsonFile('settings.json', { extraRoots: [], exportDir: path.join(require('os').homedir(), 'Music', 'DJ FLOW Playlists') });
@@ -95,8 +96,11 @@ function loadAll(force = false) {
   console.log(`DJ FLOW: ${TRACKS.length} Tracks aus ${LIBS.length} Libraries`);
 }
 
+/** „123:456#2“ ist ein zweites Vorkommen desselben Tracks (A–B–A); für alle Datenzugriffe zählt die Basis-uid */
+const baseUid = (u) => String(u).replace(/#\d+$/, '');
+const trackOf = (u) => BY_UID.get(baseUid(u));
 function libOf(uid) {
-  const [libId, id] = uid.split(':');
+  const [libId, id] = baseUid(uid).split(':');
   const lib = LIBS.find((l) => l.id === libId);
   return lib ? { lib: openLib(lib), id: Number(id), meta: lib } : null;
 }
@@ -155,6 +159,7 @@ function drives() {
 
 // ---------- Routen ----------
 let RENDER = null;
+const FILE_OK = new Map(); // Zwischenspeicher: Datei vorhanden?
 const routes = {
   'GET /api/status': () => ({ ffmpeg: !!decode.find(), tracks: TRACKS.length, libraries: LIBS, engineRunning: engine.engineIsRunning(), settings: settingsStore.load() }),
   'GET /api/tracks': () => TRACKS.map(slim),
@@ -214,12 +219,12 @@ const routes = {
   },
   'POST /api/sets/delete': (b) => { setsStore.save(setsStore.load().filter((s) => s.id !== b.id)); return { ok: true }; },
   'GET /api/tags': async (_, q) => {
-    const t = BY_UID.get(q.get('uid'));
+    const t = trackOf(q.get('uid'));
     if (!t) throw new Error('Unbekannter Track');
     return { file: await tags.readTags(t.path), engine: slim(t), guess: tags.guessFromFilename(t.filename || t.path) };
   },
   'POST /api/tags': (b) => {
-    const t = BY_UID.get(b.uid);
+    const t = trackOf(b.uid);
     if (!t) throw new Error('Unbekannter Track');
     const lost = tags.writeTags(t.path, b.tags);
     Object.assign(t, Object.fromEntries(Object.entries(b.tags).filter(([k]) => ['title', 'artist', 'album', 'genre', 'label', 'year', 'comment'].includes(k))));
@@ -234,7 +239,7 @@ const routes = {
     // Fehlende Tags aus Engine-Analyse + Dateiname in die Datei schreiben
     const results = [];
     for (const uid of b.uids || []) {
-      const t = BY_UID.get(uid);
+      const t = trackOf(uid);
       if (!t) continue;
       const g = tags.guessFromFilename(t.filename || t.path);
       const patch = {};
@@ -252,17 +257,18 @@ const routes = {
     return { results, note: 'Tags in Dateien geschrieben. In Engine DJ: Tracks markieren → „Reload Tags“, damit Engine die Änderungen übernimmt.' };
   },
   'POST /api/generate': (b) => {
-    const r = pl.generate(TRACKS, b);
+    const exists = (t) => { let v = FILE_OK.get(t.path); if (v === undefined) { v = fs.existsSync(t.path); FILE_OK.set(t.path, v); } return v; };
+    const r = pl.generate(TRACKS.filter((t) => (!b.volume || t.volume === b.volume) && (b.available === false || exists(t))), b);
     return { ...r, tracks: r.tracks.map(slim) };
   },
   'POST /api/suggest': (b) => {
-    const t = BY_UID.get(b.uid);
+    const t = trackOf(b.uid);
     if (!t) throw new Error('Unbekannter Track');
     return pl.suggestNext(TRACKS, t, b.n || 20).map(slim);
   },
-  'POST /api/transition': (b) => pl.transition(BY_UID.get(b.a), BY_UID.get(b.b)),
-  'POST /api/analyze': (b) => pl.analyzeSet((b.uids || []).map((u) => BY_UID.get(u)).filter(Boolean)),
-  'POST /api/optimize': (b) => pl.optimizeOrder((b.uids || []).map((u) => BY_UID.get(u)).filter(Boolean)).map((t) => t.uid),
+  'POST /api/transition': (b) => pl.transition(trackOf(b.a), trackOf(b.b)),
+  'POST /api/analyze': (b) => pl.analyzeSet((b.uids || []).map((u) => trackOf(u)).filter(Boolean)),
+  'POST /api/optimize': (b) => pl.optimizeOrder((b.uids || []).map((u) => trackOf(u)).filter(Boolean)).map((t) => t.uid),
   'GET /api/duplicates': () => {
     const groups = new Map();
     for (const t of TRACKS) {
@@ -274,14 +280,14 @@ const routes = {
     return [...groups.values()].filter((g) => g.length > 1).slice(0, 500);
   },
   'POST /api/export': (b) => {
-    const tracks = (b.uids || []).map((u) => BY_UID.get(u)).filter(Boolean);
+    const tracks = (b.uids || []).map((u) => trackOf(u)).filter(Boolean);
     if (!tracks.length) throw new Error('Playlist ist leer');
     const title = (b.title || 'DJ FLOW Set').replace(/[/:]/g, '-');
     if (b.mode === 'engine') {
       // Alle Tracks müssen aus derselben Engine-Library stammen
       const libId = tracks[0].libId;
       const lib = LIBS.find((l) => l.id === libId);
-      const ids = tracks.filter((t) => t.libId === libId).map((t) => t.id);
+      const ids = [...new Set(tracks.filter((t) => t.libId === libId).map((t) => t.id))]; // jeder Track nur einmal (Engine verbietet Doppelte)
       const r = engine.writePlaylist(lib, title, ids);
       loadAll(true);
       return { ...r, library: lib.dir, skipped: tracks.length - ids.length };
@@ -316,7 +322,7 @@ const routes = {
   'POST /api/trash': async (b) => {
     const results = [], gone = trashedStore.load();
     for (const uid of b.uids || []) {
-      const t = BY_UID.get(uid);
+      const t = trackOf(uid);
       if (!t) { results.push({ uid, ok: false, error: 'Unbekannter Track' }); continue; }
       try {
         await platform.trash(t.path);
@@ -328,9 +334,9 @@ const routes = {
     return { results };
   },
   'GET /api/stems/status': () => stems.status(),
-  'POST /api/stems/has': (b) => Object.fromEntries((b.uids || []).map((u) => [u, BY_UID.has(u) && stems.hasStems(BY_UID.get(u))])),
+  'POST /api/stems/has': (b) => Object.fromEntries((b.uids || []).map((u) => [u, !!trackOf(u) && stems.hasStems(trackOf(u))])),
   'POST /api/stems/setup': () => { stems.setup(); return stems.status(); },
-  'POST /api/stems/separate': (b) => { for (const u of b.uids || []) { const t = BY_UID.get(u); if (t) stems.enqueue(t); } return stems.status(); },
+  'POST /api/stems/separate': (b) => { for (const u of b.uids || []) { const t = trackOf(u); if (t) stems.enqueue(t); } return stems.status(); },
   'POST /api/stems/cancel': () => { stems.cancel(); return { ok: true }; },
   // Ausgeblendete (in den Papierkorb gelegte) Dateien: wieder aufnehmen, sobald sie zurück am Platz sind
   'GET /api/trashed': () => trashedStore.load().map((p) => ({ path: p, exists: fs.existsSync(p) })),
@@ -410,7 +416,7 @@ const routes = {
     })();
     return job;
   },
-  'POST /api/reveal': (b) => { const t = BY_UID.get(b.uid); const p = t ? t.path : b.path; platform.reveal(p); return { ok: true }; },
+  'POST /api/reveal': (b) => { const t = trackOf(b.uid); const p = t ? t.path : b.path; platform.reveal(p); return { ok: true }; },
 };
 
 const server = http.createServer(async (req, res) => {
@@ -420,17 +426,17 @@ const server = http.createServer(async (req, res) => {
   if (!['localhost', '127.0.0.1'].includes(host) || (origin && !/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin))) return send(res, 403, { error: 'verboten' });
   try {
     if (url.pathname === '/api/stems/file') {
-      const t = BY_UID.get(url.searchParams.get('uid'));
+      const t = trackOf(url.searchParams.get('uid'));
       return t ? streamFile(req, res, stems.stemFile(t, url.searchParams.get('stem'))) : send(res, 404, { error: 'unbekannt' });
     }
     if (url.pathname === '/api/pcm') {
-      const t = BY_UID.get(url.searchParams.get('uid'));
+      const t = trackOf(url.searchParams.get('uid'));
       if (!t) return send(res, 404, { error: 'unbekannt' });
       if (!decode.find() || !fs.existsSync(t.path)) return send(res, 404, { error: 'ffmpeg oder Datei fehlt' });
       return decode.stream(t.path, res, Math.max(0, Number(url.searchParams.get('t')) || 0));
     }
     if (url.pathname === '/api/audio') {
-      const t = BY_UID.get(url.searchParams.get('uid'));
+      const t = trackOf(url.searchParams.get('uid'));
       return t ? streamFile(req, res, t.path) : send(res, 404, { error: 'unbekannt' });
     }
     if (url.pathname === '/api/render/chunk' && req.method === 'POST') {

@@ -102,6 +102,7 @@
       <div class="st-transport">
         <button id="tl-undo" title="Rückgängig (Cmd/Strg+Z)">↶</button><button id="tl-redo" title="Wiederherstellen (Cmd/Strg+Umschalt+Z)">↷</button>
         <button id="tl-add">＋ Track</button><button id="tl-sug">✦ Vorschlag</button><button id="tl-harm" title="Reihenfolge harmonisch optimieren">Harmonisieren</button>
+        <button id="tl-automix" class="primary" title="Ganzes Set automatisch: Ausschnitte, Übergänge mitten in den Songs, auch 100 Songs in 60 Minuten">✦ Auto-Mix …</button><select id="tl-stylesel" title="Stil für den gewählten Übergang"></select>
         <button id="tl-loud" title="Misst alle Tracks im Set (BS.1770) und setzt ihren Gain auf gleiche Lautheit">≈ Lautstärke angleichen</button>
         <span class="sep"></span><select id="tl-brush"></select><select id="tl-lane"></select>
         <span style="flex:1"></span>
@@ -200,6 +201,7 @@
 </div>
 <script src="dsp.js"></script>
 <script src="app.js"></script>
+<script src="automix.js"></script>
 <script src="mixlab.js"></script>
 <script src="libraries.js"></script>
 </body>

@@ -34,11 +34,15 @@ function show(v) {
   if (v === 'mixlab') MixLab.render();
 }
 
+/** „uid#2“ = zweites Vorkommen desselben Tracks im Set (A–B–A): dieselben Trackdaten unter eigener Kennung */
+function registerAliases() { for (const u of S.set) { if (!u.includes('#') || S.byUid.has(u)) continue; const b = S.byUid.get(u.split('#')[0]); if (b) S.byUid.set(u, b); } }
+
 // ---------- Laden ----------
 async function load() {
   $('#stat').textContent = 'Lade Bibliothek …';
   S.tracks = await api('/api/tracks');
   S.byUid = new Map(S.tracks.map((t) => [t.uid, t]));
+  registerAliases();
   const st = await api('/api/status');
   $('#stat').innerHTML = `${S.tracks.length.toLocaleString('de')} Tracks<br>${st.libraries.filter((l) => l.trackCount).length} Engine-Libraries${st.engineRunning ? '<br><span style="color:var(--amber)">● Engine DJ läuft</span>' : ''}`;
   const genres = [...new Set(S.tracks.map((t) => t.genre).filter(Boolean))].sort((a, b) => a.localeCompare(b));

@@ -2,7 +2,7 @@
 
 Set-Editor, Playlist-Generator, Tag-Editor und Mix-Analyzer für **Engine DJ**. Electron-App für macOS (Apple Silicon) und Windows x64, gebaut für elektronische Musik.
 
-Version: **1.17.0** · Ausführliche Dokumentation: Obsidian-Vault, Ordner `DJ FLOW`.
+Version: **1.18.0** · Ausführliche Dokumentation: Obsidian-Vault, Ordner `DJ FLOW`.
 
 ## Starten und bauen
 
@@ -25,7 +25,7 @@ Die Pakete sind nicht signiert (nur Ad-hoc auf dem Mac). Beim ersten Start: Mac 
 | **Bibliothek** | Alle Engine Libraries auf allen Laufwerken, Smart Search (`8A 124-128 e>7`), „Passt danach“, Tag-Editor per ✎ oder `E` |
 | **Playlist-Generator** | Genre, BPM, BPM-Rampe, Energiekurven, harmonischer Pfad |
 | **Set-Builder** | Reihenfolge optimieren, Export als M3U8 oder Playlist direkt in Engine |
-| **Mix-Lab** | Timeline mit zwei Decks und Sample-Spur, Übergänge (Mischart + mehrere Effekte, auch mitten im Song: Drop-Stile wie Drop-In, Double Drop, Echo/Roll/Spinback/Filter → Drop, ausgerichtet an Cues, Loops und Abschnitten), Stem-Mix, Effekte im Song, Automation, Tempo-Spur, Key Lock, EQ, Limiter, Lautstärke-Angleich, Undo/Redo, Export WAV/FLAC/MP3 |
+| **Mix-Lab** | **Auto-Mix** (ganzes Set aus Ausschnitten, z.B. 100 Songs in 60 Min, Stile automatisch, optional Rückkehr A–B–A), Timeline mit zwei Decks und Sample-Spur, Übergänge (Mischart + mehrere Effekte, auch mitten im Song: Drop-Stile wie Drop-In, Double Drop, Echo/Roll/Spinback/Filter → Drop, ausgerichtet an Cues, Loops und Abschnitten), Stem-Mix, Effekte im Song, Automation, Tempo-Spur, Key Lock, EQ, Limiter, Lautstärke-Angleich, Undo/Redo, Export WAV/FLAC/MP3 |
 | **Cues & Loops** | 8 + 8 je Track, Auto-Erkennung aus der Waveform, Zurückschreiben in die Engine-DB |
 | **Stems** | Lokale Trennung mit Demucs in Drums, Bass, Melodie, Vocals |
 | **Tag-Doktor** | Fehlende Tags, Auto-Fix, Tags schreiben für MP3, WAV, AIFF, FLAC, Duplikate in den Papierkorb legen und wieder aufnehmen |
@@ -64,9 +64,10 @@ Die Pakete sind nicht signiert (nur Ad-hoc auf dem Mac). Beim ersten Start: Mac 
 | `lib/platform.js` | Unterschiede macOS/Windows |
 | `public/app.js` | Bibliothek, Generator, Set-Builder, Tag-Doktor, Laufwerke |
 | `public/mixlab.js` | Mix-Lab |
+| `public/automix.js` | Auto-Mix-Planer (Ausschnitte, Stile, Einstiegspunkte) |
 | `public/libraries.js` | Tab Libraries |
 | `public/dsp.js`, `public/limiter-worklet.js` | Zeitdehnung, Transienten, Limiter, Lautheit |
-| `test/` | `smoke.js`, `encoders.js`, `tags.js` |
+| `test/` | `smoke.js`, `encoders.js`, `tags.js`, `automix.js` |
 
 ## Datenorte
 

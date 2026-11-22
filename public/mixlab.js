@@ -47,10 +47,10 @@
     snap() {
       const edits = {}; for (const [u, ts] of ML.ts) edits[u] = H.editJson(ts.edit);
       const trans = {}; for (const k in ML.trans) trans[k] = JSON.stringify(ML.trans[k]);
-      return { set: JSON.stringify(S.set), tempo: JSON.stringify(ML.tempo || []), samples: JSON.stringify(ML.samples || []), trans, edits, pair: ML.pair };
+      return { set: JSON.stringify(S.set), master: ML.master ?? null, tempo: JSON.stringify(ML.tempo || []), samples: JSON.stringify(ML.samples || []), trans, edits, pair: ML.pair };
     },
     same(a, b) {
-      if (a.set !== b.set || a.tempo !== b.tempo || a.samples !== b.samples) return false;
+      if (a.set !== b.set || a.master !== b.master || a.tempo !== b.tempo || a.samples !== b.samples) return false;
       for (const k in b.trans) if (k in a.trans && a.trans[k] !== b.trans[k]) return false;
       for (const k in a.trans) if (k in b.trans && a.trans[k] !== b.trans[k]) return false;
       for (const u in b.edits) if (u in a.edits && a.edits[u] !== b.edits[u]) return false;
@@ -75,8 +75,9 @@
       H.restoring = true;
       const was = H.last, wasPlaying = TL.playing;
       if (wasPlaying) TL.stop();
-      S.set = JSON.parse(to.set); saveSet();
+      S.set = JSON.parse(to.set); registerAliases(); saveSet();
       ML.tempo = JSON.parse(to.tempo); localStorage.setItem('djflow.tempo', to.tempo);
+      ML.master = to.master ?? null; localStorage.setItem('djflow.master', ML.master ?? ''); const bpmIn = $('#tl-bpm'); if (bpmIn) bpmIn.value = '';
       ML.samples = JSON.parse(to.samples || '[]'); localStorage.setItem('djflow.samples', to.samples || '[]');
       for (const k in to.trans) ML.trans[k] = JSON.parse(to.trans[k]);
       localStorage.setItem('djflow.trans', JSON.stringify(ML.trans));
@@ -124,6 +125,7 @@
   const bufCache = new Map();
   async function loadBuffer(ts) {
     if (ts.buf) return ts.buf;
+    if (ts.baseUid) { const bs = await getTS(ts.baseUid); await loadBuffer(bs); ts.buf = bs.buf; ts.peaks = bs.peaks; return ts.buf; } // Audio vom ersten Vorkommen mitbenutzen
     if (!ts.bufP) {
       ts.loadingAudio = true; redrawAll();
       ts.bufP = (async () => {
@@ -182,6 +184,7 @@
     const fi = (e.fadeIn || 0) * bar(ts), fo = (e.fadeOut || 0) * bar(ts);
     if (fi && sec < fi) v *= Math.max(0, sec / fi);
     if (fo && sec > ts.dur - fo) v *= Math.max(0, (ts.dur - sec) / fo);
+    if (e.endAt != null) { const fe = 2 * bar(ts); if (sec > e.endAt - fe) v *= Math.max(0, (e.endAt - sec) / fe); } // Set endet hier: 2 Takte ausblenden
     return v;
   }
   function scheduleEnv(param, ts, pos, at, rate, until, constant = false, map = null) {
@@ -319,6 +322,7 @@
     edit.gainDb ??= 0; edit.fadeIn ??= 0; edit.fadeOut ??= 0; edit.auto ??= []; edit.keyLock ??= true; edit.fx ??= []; edit.lanes ??= {}; edit.stemOff ??= {}; edit.eq ??= { high: 0, mid: 0, low: 0, filter: 0 };
     const stemInfo = await api('/api/stems/has', { uids: [uid] });
     const ts = { hasStems: !!stemInfo[uid], uid, t, perf, edit, dur: perf.grid?.durationSec || t.length || 1, buf: null, peaks: null };
+    ts.baseUid = uid.includes('#') ? uid.split('#')[0] : null; // zweites Vorkommen desselben Tracks (A–B–A)
     ML.ts.set(uid, ts);
     return ts;
   }
@@ -811,7 +815,7 @@
   }
 
   // ================= Set-Timeline =================
-  function setTracks() { S.set = S.set.filter((u) => S.byUid.has(u)); return S.set; }
+  function setTracks() { registerAliases(); S.set = S.set.filter((u) => S.byUid.has(u)); return S.set; }
   async function render() {
     H.soon();
     const set = setTracks();
@@ -1133,7 +1137,7 @@
   });
 
   async function writeEngine(uids) {
-    const dirty = uids.filter((u) => ML.ts.get(u)?.edit);
+    const dirty = uids.filter((u) => ML.ts.get(u)?.edit && !u.includes('#')); // zweite Vorkommen nicht doppelt schreiben
     if (!dirty.length) return toast('Keine Änderungen zum Schreiben');
     // ungespeicherte Änderungen sofort sichern
     await Promise.all(dirty.map((u) => api('/api/edits', { uid: u, edit: ML.ts.get(u).edit })));
@@ -1424,19 +1428,19 @@
   }
   $('#ml-save').onclick = async () => {
     const trans = {}; for (let i = 0; i < S.set.length - 1; i++) { const k = pairKey(S.set[i], S.set[i + 1]); if (ML.trans[k]) trans[k] = ML.trans[k]; }
-    const s = await api('/api/sets', { id: ML.setId, title: $('#ml-title').value, tracks: S.set, transitions: trans, tempo: ML.tempo, samples: ML.samples });
+    const s = await api('/api/sets', { id: ML.setId, title: $('#ml-title').value, tracks: S.set, transitions: trans, tempo: ML.tempo, samples: ML.samples, master: ML.master });
     ML.setId = s.id; localStorage.setItem('djflow.setId', s.id); localStorage.setItem('djflow.setTitle', s.title);
     await refreshSets(); toast('💾 Set gespeichert');
   };
   $('#ml-load').onchange = async (e) => {
     const sets = await api('/api/sets'); const s = sets.find((x) => x.id === e.target.value); if (!s) return;
-    S.set = s.tracks.slice(); saveSet(); ML.tempo = s.tempo || []; saveTempo(); ML.samples = s.samples || []; saveSamples(); Object.assign(ML.trans, s.transitions || {}); saveTrans();
+    S.set = s.tracks.slice(); registerAliases(); saveSet(); ML.tempo = s.tempo || []; saveTempo(); ML.samples = s.samples || []; saveSamples(); ML.master = s.master || null; saveMaster(); Object.assign(ML.trans, s.transitions || {}); saveTrans();
     ML.setId = s.id; $('#ml-title').value = s.title; localStorage.setItem('djflow.setId', s.id); localStorage.setItem('djflow.setTitle', s.title);
     ML.pair = 0; render();
   };
   $('#ml-new').onclick = () => {
     if (S.set.length && !confirm('Neues leeres Set beginnen? (Das aktuelle bleibt erhalten, wenn es gespeichert ist.)')) return;
-    S.set = []; saveSet(); ML.tempo = []; saveTempo(); ML.samples = []; saveSamples(); ML.setId = null; localStorage.removeItem('djflow.setId'); $('#ml-title').value = 'Neues Set'; refreshSets(); render();
+    S.set = []; saveSet(); ML.tempo = []; saveTempo(); ML.samples = []; saveSamples(); ML.master = null; saveMaster(); ML.setId = null; localStorage.removeItem('djflow.setId'); $('#ml-title').value = 'Neues Set'; refreshSets(); render();
   };
   $('#ml-title').value = localStorage.getItem('djflow.setTitle') || 'Mein Set';
   $('#ml-title').onchange = () => localStorage.setItem('djflow.setTitle', $('#ml-title').value);
@@ -1449,6 +1453,8 @@
 
   // ================= Tempo-Spur: Punkte in Takten; W rechnet Set-Zeit (bei Master-BPM) in echte Zeit um =================
   ML.tempo = JSON.parse(localStorage.getItem('djflow.tempo') || '[]');
+  ML.master = Number(localStorage.getItem('djflow.master')) || null; // Master-BPM des Sets (leer = Tempo von Track 1)
+  const saveMaster = () => { localStorage.setItem('djflow.master', ML.master ?? ''); H.soon(); };
   // Sample-Spur: Ausschnitte aus beliebigen Tracks oder deren Stems. start = Set-Zeit (bei Master-BPM), in/len = Sekunden im Quelltrack
   ML.samples = JSON.parse(localStorage.getItem('djflow.samples') || '[]');
   const saveSamples = () => { localStorage.setItem('djflow.samples', JSON.stringify(ML.samples)); H.soon(); };
@@ -1529,7 +1535,7 @@
         c.end = isCut && !tail ? T + 0.01 : Math.max(fxT + tail, T + 0.25);
         if (!(c.tr.holdLoop >= 0) && !tail) c.end = Math.min(c.end, Math.max(natural, T + 0.25));
         start = T;
-      } else c.end = natural;
+      } else { c.end = natural; if (ts.edit.endAt != null) c.end = Math.max(c.start + 1, Math.min(natural, c.g(ts.edit.endAt))); } // letzter Track: nur bis zum Ende des Ausschnitts
       clips.push(c);
     });
     const tm = tempoMap(ML.tempo, M); clips.forEach((c) => { c.tm = tm;
@@ -1541,6 +1547,7 @@
 
   async function loadStems(ts) {
     if (ts.stems) return ts.stems;
+    if (ts.baseUid) { const bs = await getTS(ts.baseUid); ts.stems = await loadStems(bs); ts.stemLag = bs.stemLag; return ts.stems; }
     const out = {};
     await Promise.all(STEM_NAMES.map(async (n) => {
       const r = await fetch('/api/stems/file?uid=' + encodeURIComponent(ts.uid) + '&stem=' + n); if (!r.ok) throw new Error('Stem nicht gefunden: ' + n);
@@ -1568,12 +1575,15 @@
     const ts = c.ts; await loadBuffer(ts);
     const tm = c.tm || IDENT;
     if (ts.edit.keyLock && (tm.on || Math.abs(c.rate - 1) > 0.001)) {
-      const key = c.in + '|' + c.rate + '|' + c.start + '|' + tm.key;
+      const hold = c.tr && c.tr.type !== 'cut' ? ts.edit.loops[c.tr.holdLoop] : null;
+      let needTrack = Math.min(ts.dur, c.in + (c.end - c.start) * c.rate + 3); // Ende des gebrauchten Bereichs im Track
+      if (hold) needTrack = Math.min(ts.dur, Math.max(needTrack, hold.end + 1));
+      const key = c.in + '|' + c.rate + '|' + c.start + '|' + tm.key + '|' + Math.round(needTrack);
       if (!ts.stret || ts.stretKey !== key) {
         await new Promise((r) => setTimeout(r, 20));
-        const sr = ts.buf.sampleRate, s0 = Math.floor(c.in * sr), chs = [];
-        for (let i = 0; i < ts.buf.numberOfChannels; i++) chs.push(ts.buf.getChannelData(i).subarray(s0));
-        const W0 = tm.W(c.start), outLen = Math.round((tm.W(c.g(ts.dur)) - W0) * sr);
+        const sr = ts.buf.sampleRate, s0 = Math.floor(c.in * sr), endS = Math.ceil(needTrack * sr), chs = [];
+        for (let i = 0; i < ts.buf.numberOfChannels; i++) chs.push(ts.buf.getChannelData(i).subarray(s0, endS));
+        const W0 = tm.W(c.start), outLen = Math.round((tm.W(c.g(needTrack)) - W0) * sr);
         const st = DSP.wsola(chs, sr, c.rate, (o) => (tm.Winv(W0 + o / sr) - c.start) * c.rate * sr, outLen);
         const b = ac().createBuffer(chs.length, st[0].length, sr); st.forEach((d, i) => b.copyToChannel(d, i));
         ts.stret = b; ts.stretKey = key; ts.stretPlan = st.plan; ts.stemsSt = null;
@@ -1581,10 +1591,10 @@
       if (c.useStems) {
         await loadStems(ts);
         if (!ts.stemsSt || ts.stemsStKey !== key) {
-          const sr = ts.buf.sampleRate, s0 = Math.floor(c.in * sr), W0 = tm.W(c.start), outLen = ts.stret.length, res = {};
+          const sr = ts.buf.sampleRate, s0 = Math.floor(c.in * sr), endS = Math.ceil(needTrack * sr), W0 = tm.W(c.start), outLen = ts.stret.length, res = {};
           for (const n of STEM_NAMES) {
             await new Promise((r) => setTimeout(r, 0));
-            const src = ts.stems[n], chs = []; for (let i = 0; i < src.numberOfChannels; i++) chs.push(src.getChannelData(i).subarray(s0));
+            const src = ts.stems[n], chs = []; for (let i = 0; i < src.numberOfChannels; i++) chs.push(src.getChannelData(i).subarray(s0, endS));
             const st = DSP.wsola(chs, sr, c.rate, (o) => (tm.Winv(W0 + o / sr) - c.start) * c.rate * sr, outLen, ts.stretPlan);
             const b = ac().createBuffer(chs.length, st[0].length, sr); st.forEach((x, i) => b.copyToChannel(x, i)); res[n] = b;
           }
@@ -2208,7 +2218,7 @@
   $('#tl-lane').onchange = (e) => setTool(null, e.target.value);
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && (TL.brush || TL.lane)) setTool(null, null); });
   $('#tl-play').onclick = () => (TL.playing ? TL.stop() : TL.play());
-  $('#tl-bpm').onchange = (e) => { ML.master = +e.target.value || null; TL.stop(); TL.refresh(); };
+  $('#tl-bpm').onchange = (e) => { ML.master = +e.target.value || null; saveMaster(); TL.stop(); TL.refresh(); };
   const fitAll = () => { TL.px = Math.max(0.05, ($('#tl-canvas').clientWidth - 20) / Math.max(1, TL.total)); TL.x0 = 0; TL.draw(); };
   $('#tl-fit').onclick = fitAll;
   const jump = (dir) => {
@@ -2371,13 +2381,17 @@
       if (d.tool === 'sample') { if (d.moved) { saveSamples(); TL.refresh(); if (TL.playing) TL.play(); } return; }
       if (d.tool === 'tempo') { saveTempo(); if (TL.playing) TL.play(); TL.draw(); return; }
       if (d.tool) { if (d.dirty) { changed(d.clip.ts); if (TL.playing) TL.play(); } TL.draw(); return; }
-      if (d.zone) { if (d.dirty) changed(d.dirty); TL.draw(); renderStrips(); renderBottom(); return; }
+      if (d.zone) { if (d.dirty) changed(d.dirty); TL.draw(); renderStrips(); if (!d.moved && bottom !== 'transition') setBottom('transition'); else renderBottom(); return; }
       if (d.dirty) { changed(d.dirty); return; }
       if (!d.moved) {
         // Klick im Übergang wählt diesen, sonst den Track; dazu Abspielposition
-        const inZone = d.clip.tr && d.s >= d.clip.T ? d.i : d.i > 0 && d.s < TL.clips[d.i - 1].end ? d.i - 1 : Math.min(d.i, Math.max(0, S.set.length - 2));
+        // Trefferfläche eines Übergangs: ein halber Takt davor bis zum Ende, mindestens ein Takt (harte Wechsel sind sonst nur 0,01 s breit)
+        const barS = 240 / TL.M, near = TL.clips.findIndex((c) => c.tr && d.s >= c.T - 0.5 * barS && d.s <= Math.max(c.end, c.T + barS));
+        const inZone = near >= 0 ? near : d.clip.tr && d.s >= d.clip.T ? d.i : d.i > 0 && d.s < TL.clips[d.i - 1].end ? d.i - 1 : Math.min(d.i, Math.max(0, S.set.length - 2));
         ML.pair = inZone; TL.pos = d.s; if (TL.playing) TL.play(); else { TL.syncUI(); TL.draw(); }
-        renderStrips(); renderBottom();
+        renderStrips();
+        const zoneClick = near >= 0 || (d.clip.tr && d.s >= d.clip.T) || (d.i > 0 && d.s < TL.clips[d.i - 1].end);
+        if (zoneClick && bottom !== 'transition') setBottom('transition'); else renderBottom();
       }
     });
     cv.addEventListener('dblclick', (e) => { const i = clipAt(e.offsetX, e.offsetY); if (i >= 0) { ML.pair = Math.min(i, Math.max(0, S.set.length - 2)); setBottom('track'); } });
@@ -2482,6 +2496,112 @@
     if (k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (k === 'y') { e.preventDefault(); redo(); }
   });
+  // ================= Auto-Mix: ganzes Set automatisch, auch als Kurzmix (z.B. 100 Songs in 60 Minuten) =================
+  const BREAKIN_DEF = { type: 'bands', fx: [], bands: { low: 'swap', mid: 'crossfade', high: 'crossfade' } }; // Break → Drop: Bass-Tausch, sonst Crossfade
+  const mapLimit = async (list, n, fn) => { let i = 0; await Promise.all(Array.from({ length: Math.min(n, list.length) }, async () => { while (i < list.length) { const k = i++; await fn(list[k], k); } })); };
+
+  function openAutoMix() {
+    const cur = S.set.filter((u) => S.byUid.has(u) && !u.includes('#')).length;
+    const m = document.createElement('div'); m.className = 'modal'; document.body.appendChild(m);
+    m.innerHTML = `<div class="card am-card"><h3>✦ Auto-Mix</h3><div class="am-grid">
+      <div><b>Tracks</b>
+        <label class="check"><input type="radio" name="am-src" value="set" ${cur >= 2 ? 'checked' : ''} ${cur < 2 ? 'disabled' : ''}> Aktuelles Set (${cur} Tracks, Reihenfolge bleibt)</label>
+        <label class="check"><input type="radio" name="am-src" value="gen" ${cur < 2 ? 'checked' : ''}> Neu aus der Bibliothek zusammenstellen</label>
+        <div class="am-sub" id="am-gen">
+          <label>Anzahl Tracks <input id="am-n" type="number" min="2" max="200" value="100"></label>
+          <label>Genre <input id="am-genre" placeholder="techno, house …"></label>
+          <label>BPM von <input id="am-bmin" type="number" placeholder="124"> bis <input id="am-bmax" type="number" placeholder="136"></label>
+          <label>Laufwerk <select id="am-vol"><option value="">alle</option>${[...new Set(S.tracks.map((t) => t.volume))].map((v) => `<option>${esc(v)}</option>`).join('')}</select></label>
+          <label>Energiekurve <select id="am-curve">${Object.entries(CURVES).map(([k, [n]]) => `<option value="${k}" ${k === 'journey' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        </div></div>
+      <div><b>Länge</b>
+        <label>Gesamtdauer <input id="am-min" type="number" min="5" max="600" value="60"> Minuten</label>
+        <div id="am-per" class="muted small"></div>
+        <b class="am-h">Stile</b>
+        <div class="am-styles">${DROP_STYLES.map(([id, name, desc]) => `<label class="check" title="${esc(desc)}"><input type="checkbox" class="am-st" value="${id}" checked> ${name}</label>`).join('')}</div>
+        <label class="check"><input type="checkbox" id="am-ret"> Rückkehr (A–B–A) alle <input id="am-retn" type="number" min="2" max="20" value="5" style="width:52px"> Tracks</label>
+        <label class="check" title="Misst jeden Track (ITU BS.1770) und gleicht den Gain an. Bei 100 Tracks einige Minuten."><input type="checkbox" id="am-loud"> Lautstärke angleichen (dauert)</label>
+      </div></div>
+      <p class="muted small">Jeder Song läuft nur im Ausschnitt rund um seinen Drop, die Übergänge liegen mitten in den Songs. Ersetzt das aktuelle Set, die Übergänge, die Tempo-Spur und die Samples; mit Undo (Cmd+Z) geht alles zurück.</p>
+      <div class="bar"><button id="am-go" class="primary big">✦ Auto-Mix erstellen</button><button id="am-x" class="ghost">Abbrechen</button><span id="am-msg" class="muted"></span></div></div>`;
+    const q = (s) => m.querySelector(s), src = () => m.querySelector('input[name="am-src"]:checked').value;
+    const per = () => {
+      const n = src() === 'set' ? cur : +q('#am-n').value || 0, min = +q('#am-min').value || 0;
+      q('#am-gen').style.opacity = src() === 'gen' ? 1 : 0.4; q('#am-per').textContent = n ? `Ø ${Math.round((min * 60) / n)} s pro Track (etwa ${Math.round((min * 60) / n / 1.875)} Takte bei 128 BPM)` : '';
+    };
+    m.addEventListener('input', per); per();
+    m.onclick = (e) => { if (e.target === m || e.target.id === 'am-x') m.remove(); };
+    q('#am-go').onclick = async () => {
+      const num = (id) => (q(id).value === '' ? undefined : Number(q(id).value));
+      const o = { source: src(), n: num('#am-n') || 100, genres: q('#am-genre').value.split(',').map((x) => x.trim()).filter(Boolean), bpmMin: num('#am-bmin'), bpmMax: num('#am-bmax'), volume: q('#am-vol').value, curve: q('#am-curve').value,
+        minutes: num('#am-min') || 60, styles: [...m.querySelectorAll('.am-st:checked')].map((x) => x.value), ret: q('#am-ret').checked, retN: num('#am-retn') || 5, loud: q('#am-loud').checked };
+      if (!o.styles.length) return (q('#am-msg').textContent = 'Mindestens einen Stil wählen.');
+      q('#am-go').disabled = true;
+      try {
+        const r = await runAutoMix(o, (t) => { q('#am-msg').textContent = t; });
+        m.remove(); showAutoMixResult(r);
+      } catch (e) { q('#am-msg').textContent = '⚠ ' + e.message; q('#am-go').disabled = false; }
+    };
+  }
+
+  /** Planen und anwenden. Liefert eine Zusammenfassung. */
+  async function runAutoMix(o, say) {
+    let uids;
+    if (o.source === 'gen') {
+      say('Wähle passende Tracks aus der Bibliothek …');
+      const r = await api('/api/generate', { genres: o.genres, bpmMin: o.bpmMin, bpmMax: o.bpmMax, count: o.n, curve: o.curve, volume: o.volume || undefined });
+      if (!r.tracks.length) throw new Error('Keine passenden Tracks mit vorhandener Datei gefunden. Filter lockern?');
+      uids = r.tracks.map((t) => t.uid);
+    } else uids = [...new Set(S.set.filter((u) => S.byUid.has(u) && !u.includes('#')))];
+    if (uids.length < 2) throw new Error('Mindestens zwei Tracks nötig.');
+    const infos = new Array(uids.length); let done = 0;
+    await mapLimit(uids, 6, async (u, k) => {
+      const ts = await getTS(u), g = ts.perf.grid;
+      infos[k] = { uid: u, bpm: ts.t.bpm, energy: ts.t.energy, length: ts.t.length, grid: g && g.beatSec ? { firstBeatSec: g.firstBeatSec, beatSec: g.beatSec, durationSec: ts.dur } : null, sections: (ts.perf.auto?.sections || []).map((s) => ({ full: s.full, start: s.start, end: s.end })) };
+      say(`Lese Struktur … ${++done}/${uids.length}`);
+    });
+    say('Plane Ausschnitte und Übergänge …');
+    const plan = AutoMix.plan(infos, { totalSec: o.minutes * 60, styles: o.styles, returnEvery: o.ret ? o.retN : 0, seed: (Math.random() * 1e6) | 0 });
+    if (plan.error) throw new Error(plan.error);
+    H.commit(); // Zustand davor für Undo sichern
+    const newSet = plan.entries.map((e) => { if (!e.ret) return e.uid; const a = e.uid + '#2'; S.byUid.set(a, S.byUid.get(e.uid)); return a; });
+    const last = plan.entries.length - 1, tss = [];
+    for (let k = 0; k <= last; k++) {
+      const e = plan.entries[k], ts = await getTS(newSet[k]);
+      ts.edit.mixIn = e.enter; ts.edit.mixOut = e.leave; ts.edit.endAt = k === last ? e.leave : null; ts.edit.dirty = true; tss.push(ts);
+    }
+    for (let k = 0; k < last; k++) {
+      const st = plan.entries[k].style, def = st.style === 'breakIn' ? BREAKIN_DEF : STYLE_DEF[st.style];
+      ML.trans[pairKey(newSet[k], newSet[k + 1])] = { type: def.type, bars: st.bars, fx: [...def.fx], bands: def.bands ? { ...def.bands } : defBands(), stemModes: defStems(), lead: 8, auto: false, style: st.style, styleN: null, holdLoop: -1, norm: true };
+    }
+    S.set = newSet; saveSet(); ML.tempo = []; saveTempo(); ML.samples = []; saveSamples(); saveTrans();
+    ML.master = plan.master; saveMaster(); ML.pair = 0; TL.fitted = false; TL.pos = 0;
+    say('Berechne Zeitleiste …');
+    await TL.refresh(); renderStrips(); renderBottom();
+    say('Speichere …');
+    await mapLimit(tss, 6, (ts) => api('/api/edits', { uid: ts.uid, edit: ts.edit }));
+    if (o.loud) { say('Gleiche Lautstärke an … (misst jeden Track)'); await matchLoudness(); }
+    H.commit();
+    const styles = {}; for (const e of plan.entries) if (e.style) styles[e.style.style] = (styles[e.style.style] || 0) + 1;
+    const far = infos.filter((x) => x.grid && x.bpm && Math.abs(rateTo(plan.master, x.bpm) - 1) > 0.08).length;
+    return { n: newSet.length, returns: plan.entries.filter((e) => e.ret).length, durSec: TL.tm.W(TL.total), targetSec: o.minutes * 60, styles, skipped: plan.skipped.length, far, master: plan.master };
+  }
+  function showAutoMixResult(r) {
+    const names = Object.entries(r.styles).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n}× ${MIX_STYLE_NAME(k)}`).join(', ');
+    toast(`✦ Auto-Mix: ${r.n} Einträge in ${fmt(r.durSec)} (Ziel ${fmt(r.targetSec)}) bei ${r.master.toFixed(1)} BPM${r.returns ? ' · ' + r.returns + '× Rückkehr' : ''}<br>${esc(names)}${r.skipped ? `<br>⚠ ${r.skipped} Track(s) ohne Beatgrid übersprungen` : ''}${r.far ? `<br>⚠ ${r.far} Track(s) weichen mehr als 8 % vom Tempo ab` : ''}`, 12000);
+  }
+  const MIX_STYLE_NAME = (id) => DROP_STYLES.find((s) => s[0] === id)?.[1] || id;
+
+  $('#tl-automix').onclick = openAutoMix;
+  $('#tl-stylesel').innerHTML = '<option value="">Stil für Übergang …</option>' + DROP_STYLES.map(([id, n]) => `<option value="${id}">${n}</option>`).join('') + '<option value="auto">✦ Auto Ende (Songende)</option>';
+  $('#tl-stylesel').onchange = async (e) => {
+    const v = e.target.value; e.target.value = ''; if (!v) return;
+    const p = await currentPair(); if (!p) return toast('Für einen Übergang braucht das Set mindestens zwei Tracks.');
+    if (TL.playing) TL.stop(); setBottom('transition');
+    if (v === 'auto') await autoTransition(p.A, p.B); else await autoStyle(v, p.A, p.B);
+    await TL.refresh(); showTransition(); renderBottom();
+  };
+
   H.ui();
   setBottom('transition');
   window.MixLab = { render, openPair, addTrack, TYPES, _clipRender: async (idx) => {
@@ -2501,7 +2621,7 @@
       out.push({ i: k.i, gain: k.ts.edit.gainDb, tr: k.tr && k.tr.type + '+' + (k.tr.fx || []).join(), prev: k.prevTr && k.prevTr.type, srcPeak: +srcP.toFixed(2), peak: +p.toFixed(2), atRel: +(at / sr).toFixed(1), len: +(k.end - k.start).toFixed(1), T: k.T && +(k.T - k.start).toFixed(1), over: +(over / sr).toFixed(2) });
     }
     return out;
-  }, _state: ML, _H: H, _anchors: anchorsOf, _midList: midCandidates, _mid: autoMid, _style: autoStyle, _styleList: styleCandidates, _drops: dropTargets, _scheduleSample: scheduleSample, _prepareSample: prepareSample, _prepare: prepareClip, _schedule: scheduleClip, _build: buildClips, _match: matchLoudness, _getTS: getTS, _renderRange: async (ts, from, len) => {
+  }, _state: ML, _H: H, _anchors: anchorsOf, _midList: midCandidates, _mid: autoMid, _auto: runAutoMix, _openAuto: openAutoMix, _style: autoStyle, _styleList: styleCandidates, _drops: dropTargets, _scheduleSample: scheduleSample, _prepareSample: prepareSample, _prepare: prepareClip, _schedule: scheduleClip, _build: buildClips, _match: matchLoudness, _getTS: getTS, _renderRange: async (ts, from, len) => {
     await loadBuffer(ts); const sr = ac().sampleRate, oc = new OfflineAudioContext(2, Math.ceil(len * sr), sr);
     scheduleClip(oc, { ts, rate: 1, start: 0, in: from, end: len, tr: null, prevTr: null, noStret: true, g: (p) => p - from }, 0, oc.destination, null, 60 / beat(ts));
     return oc.startRendering();
