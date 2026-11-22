@@ -40,7 +40,7 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           mkdir -p "$(dirname '${{ matrix.ff_dst }}')"
           cp "../ffdl/node_modules/ffmpeg-static/${{ matrix.ff_src }}" "${{ matrix.ff_dst }}"
-      - run: npm run ${{ matrix.dist }}
+      - run: npm run ${{ matrix.dist }} -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: softprops/action-gh-release@v2
