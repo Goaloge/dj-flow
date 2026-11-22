@@ -1,0 +1,20 @@
+# Abhängigkeiten und Build-Ergebnisse
+node_modules/
+dist/
+
+# Lokale Daten (Bibliotheks-Zwischenspeicher, Bearbeitungen, Sets, Stem-Umgebung, Papierkorb-Liste)
+data/
+
+# ffmpeg-Binaries werden nicht mitgeliefert, siehe README
+build/ffmpeg/
+
+# Werkzeuge und Fremdes
+.claude/
+splash-manager/
+splash-manager-*.tar.gz
+
+# System und Temporäres
+.DS_Store
+*.log
+*.part
+*.djflow-tmp*

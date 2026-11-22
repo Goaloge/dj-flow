@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DJ FLOW</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+  <aside class="nav">
+    <div class="logo"><span class="pulse"></span>DJ<b>FLOW</b></div>
+    <button data-view="library" class="active">◉ Bibliothek</button>
+    <button data-view="generator">✦ Playlist-Generator</button>
+    <button data-view="set">≡ Set-Builder</button>
+    <button data-view="mixlab">⇄ Mix-Lab</button>
+    <button data-view="tags">✎ Tag-Doktor</button>
+    <button data-view="libs">◫ Libraries</button>
+    <button data-view="drives">⛁ Laufwerke</button>
+    <div class="nav-foot">
+      <div id="stat"></div>
+      <button id="rescan" class="ghost">↻ Neu einlesen</button>
+    </div>
+  </aside>
+
+  <main>
+    <!-- BIBLIOTHEK -->
+    <section id="view-library" class="view active">
+      <header class="bar">
+        <input id="q" placeholder="Suche Artist, Titel, Label, Genre …  (z.B. „acid 8A 128-132 e>7“)">
+        <select id="f-genre"><option value="">Alle Genres</option></select>
+        <select id="f-vol"><option value="">Alle Laufwerke</option></select>
+        <span id="count" class="muted"></span>
+      </header>
+      <div class="hint muted">Tipp: <kbd>Leertaste</kbd> spielt ab · <kbd>Doppelklick</kbd> hängt den Track im Mix-Lab ans Set · <kbd>+</kbd> fügt zum Set hinzu · <kbd>E</kbd> oder ✎ bearbeitet die Tags · Suchsyntax: <code>8A</code>, <code>124-128</code>, <code>e&gt;7</code></div>
+      <div class="table-wrap"><table id="tbl">
+        <thead><tr>
+          <th data-sort="artist">Artist</th><th data-sort="title">Titel</th><th data-sort="genre">Genre</th>
+          <th data-sort="bpm">BPM</th><th data-sort="camelot">Key</th><th data-sort="energy">Energie</th>
+          <th data-sort="length">Zeit</th><th data-sort="volume">Laufwerk</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="side-suggest" id="suggest"></div>
+    </section>
+
+    <!-- GENERATOR -->
+    <section id="view-generator" class="view">
+      <h1>Playlist-Generator</h1>
+      <div class="gen-grid">
+        <div class="card">
+          <label>Genres <small>(mehrere, Komma)</small><input id="g-genres" placeholder="techno, acid, trance"></label>
+          <div class="row"><label>BPM min<input id="g-bpmmin" type="number" placeholder="120"></label><label>BPM max<input id="g-bpmmax" type="number" placeholder="140"></label></div>
+          <div class="row"><label>BPM-Rampe Start<input id="g-bpmstart" type="number" placeholder="z.B. 124"></label><label>BPM-Rampe Ende<input id="g-bpmend" type="number" placeholder="z.B. 132"></label></div>
+          <div class="row"><label>Energie min<input id="g-emin" type="number" min="1" max="10"></label><label>Energie max<input id="g-emax" type="number" min="1" max="10"></label></div>
+          <label>Startet in Tonart <small>(optional, Camelot)</small><input id="g-keys" placeholder="8A, 9A"></label>
+          <div class="row"><label>Anzahl Tracks<input id="g-count" type="number" value="20"></label><label>oder Spielzeit (Min)<input id="g-min" type="number" placeholder="60"></label></div>
+          <label class="check"><input type="checkbox" id="g-strict"> Nur streng harmonische Übergänge</label>
+        </div>
+        <div class="card">
+          <h3>Energiekurve</h3>
+          <div id="curves" class="curves"></div>
+          <canvas id="curve-preview" width="420" height="120"></canvas>
+          <button id="g-run" class="primary big">✦ Set generieren</button>
+          <button id="g-again" class="ghost">⟳ Neue Variante</button>
+        </div>
+      </div>
+      <div id="g-result"></div>
+    </section>
+
+    <!-- SET BUILDER -->
+    <section id="view-set" class="view">
+      <header class="bar">
+        <input id="set-title" value="Mein Set" class="title-input">
+        <button id="set-optimize">⚡ Reihenfolge optimieren</button>
+        <button id="set-m3u">⇩ M3U exportieren</button>
+        <button id="set-engine" class="primary">⇪ In Engine DJ speichern</button>
+        <button id="set-clear" class="ghost">Leeren</button>
+      </header>
+      <canvas id="set-chart" height="140"></canvas>
+      <div id="set-score"></div>
+      <ol id="set-list" class="set-list"></ol>
+    </section>
+
+    <!-- MIX LAB -->
+    <section id="view-mixlab" class="view">
+      <header class="st-top">
+        <input id="ml-title" class="title-input" value="Mein Set">
+        <select id="ml-load"><option value="">Gespeicherte Sets …</option></select>
+        <button id="ml-save">💾</button><button id="ml-new" class="ghost" title="Neues Set">＋ Neu</button>
+        <span class="sep"></span>
+        <canvas id="tl-over" title="Klick springt in diesen Bereich"></canvas>
+        <span class="sep"></span>
+        <span id="tl-time" class="muted"></span>
+        <label class="tl-l">BPM <input id="tl-bpm" type="number" step="0.01"></label>
+      </header>
+      <div class="st-main">
+        <div id="tl-decks"><div class="st-rul"></div><div class="st-strip" id="tl-strip-0"></div><div class="st-strip" id="tl-strip-1"></div><div class="st-strip st-sample" id="tl-strip-s"></div></div>
+        <div class="tl-cwrap"><canvas id="tl-canvas"></canvas><div id="tl-scroll"></div></div>
+        <canvas id="tl-master" title="Summen-Pegel"></canvas>
+      </div>
+      <div class="st-transport">
+        <button id="tl-undo" title="Rückgängig (Cmd/Strg+Z)">↶</button><button id="tl-redo" title="Wiederherstellen (Cmd/Strg+Umschalt+Z)">↷</button>
+        <button id="tl-add">＋ Track</button><button id="tl-sug">✦ Vorschlag</button><button id="tl-harm" title="Reihenfolge harmonisch optimieren">Harmonisieren</button>
+        <button id="tl-loud" title="Misst alle Tracks im Set (BS.1770) und setzt ihren Gain auf gleiche Lautheit">≈ Lautstärke angleichen</button>
+        <span class="sep"></span><select id="tl-brush"></select><select id="tl-lane"></select>
+        <span style="flex:1"></span>
+        <button id="tl-start" title="Zum Anfang">⏮</button><button id="tl-prev" title="Voriger Übergang">◀◀</button>
+        <button id="tl-play" class="primary tl-playb">▶</button>
+        <button id="tl-next" title="Nächster Übergang">▶▶</button>
+        <span style="flex:1"></span>
+        <label class="tl-l">Snap <select id="ml-snap">
+          <option value="0">Aus</option><option value="0.25">1/4 Beat</option><option value="0.5">1/2 Beat</option><option value="1">1 Beat</option>
+          <option value="4" selected>1 Takt</option><option value="16">4 Takte</option><option value="64">16 Takte</option><option value="-1">Transient</option></select></label>
+        <label class="check tl-l" title="Verhindert Übersteuerung beim Abhören und im Export"><input type="checkbox" id="tl-lim" checked> Limiter <b id="tl-gr" class="s-mid">0.0 dB</b></label>
+        <button id="tl-fit" class="ghost">Ganzes Set</button>
+      </div>
+      <div id="tl-hint" class="tl-hint" style="display:none"></div>
+      <div class="st-bottom">
+        <div class="ml-pane" data-pane="transition" id="ml-pane-transition"></div>
+        <div class="ml-pane" data-pane="track">
+          <div class="bar ml-tools">
+            <label>Neue Loops <select id="ml-looplen"><option value="0.25">1/4</option><option value="0.5">1/2</option><option value="1">1 Beat</option><option value="2">2 Beats</option><option value="4">1 Takt</option><option value="8">2 Takte</option><option value="16" selected>4 Takte</option><option value="32">8 Takte</option></select></label>
+            <label class="check"><input type="checkbox" id="ml-sync" checked> Sync-Ansicht</label>
+            <span class="muted small">Mausrad = Zoom · Ziehen = Scrollen · Doppelklick = Cue · Alt+Ziehen = Loop · Marker ziehen · Rechtsklick = löschen</span>
+          </div>
+          <div id="ml-editor"></div>
+        </div>
+        <div class="ml-pane" data-pane="list"><div id="ml-timeline" class="ml-timeline"></div>
+          <div class="bar"><button id="ml-autoall">✦ Auto-Cues alle</button><button id="ml-cues-engine">⇪ Cues → Engine</button><button id="ml-pl-engine">⇪ Playlist → Engine</button><button id="ml-m3u" class="ghost">⇩ M3U</button><button id="ml-playset" class="ghost">▶ Übergänge durchhören</button></div></div>
+        <div class="ml-pane" data-pane="stems" id="ml-pane-stems"></div>
+        <div class="ml-pane" data-pane="export"><div class="bar">
+          <select id="tl-format"><option value="wav">WAV 24 Bit</option><option value="flac">FLAC 24 Bit (lossless)</option><option value="mp3">MP3 320 kBit/s</option></select>
+          <button id="tl-export" class="primary">⇩ Exportieren</button><span id="tl-progress" class="muted"></span></div>
+          <p class="muted small">Mit Übergängen, Gain, EQ, Fades, Kurven und Key Lock. Solo und Mute der Decks gelten nur beim Abhören.</p></div>
+      </div>
+      <nav class="st-tabs">
+        <button class="ml-btab" data-tab="transition">⇄ Übergang</button><button class="ml-btab" data-tab="track">〰 Track &amp; Cues</button><button class="ml-btab" data-tab="list">≡ Trackliste</button><button class="ml-btab" data-tab="stems">▥ Stems</button><button class="ml-btab" data-tab="export">⇩ Export</button>
+      </nav>
+    </section>
+
+    <!-- TAG DOCTOR -->
+    <section id="view-tags" class="view">
+      <h1>Tag-Doktor</h1>
+      <div class="row-tabs">
+        <button id="t-missing" class="primary">Fehlende Tags finden</button>
+        <button id="t-dupes">Duplikate finden</button>
+        <button id="t-trashed" class="ghost">🗑 Gelöschte</button>
+        <label class="check"><input type="checkbox" id="t-genre"> Genre aus BPM vorschlagen</label>
+        <select id="t-keyfmt"><option value="camelot">Key als Camelot (8A)</option><option value="musical">Key musikalisch (Am)</option></select>
+      </div>
+      <div id="t-out"></div>
+      <div id="tag-editor" class="modal hidden"></div>
+    </section>
+
+    <!-- DRIVES -->
+    <section id="view-libs" class="view">
+      <header class="bar">
+        <label class="tl-l">Library <select id="lb-lib"></select></label>
+        <button id="lb-rescan" class="ghost" title="Laufwerke und Libraries neu suchen, z.B. nach Anschließen des Prime">↻ Neu einlesen</button>
+        <span class="sep"></span>
+        <label class="tl-l">Schreiben in <select id="lb-target"></select></label>
+        <select id="lb-mode"><option value="fill">Nur freie Plätze füllen</option><option value="all">Alle 8 Cues + 8 Loops ersetzen</option></select>
+        <button id="lb-bulk" class="primary">✦ Alle fehlenden</button>
+        <label class="check"><input type="checkbox" id="lb-miss"> nur fehlende zeigen</label>
+      </header>
+      <div class="lb-status"><span id="lb-info" class="muted"></span> <b id="lb-job" class="s-hi"></b> <span id="lb-warn" class="s-mid"></span></div>
+      <div class="lb-main">
+        <div id="lb-tree" class="lb-tree"></div>
+        <div class="table-wrap"><table><thead><tr><th>Artist</th><th>Titel</th><th>BPM</th><th>Key</th><th>Cues</th><th>Loops</th><th>Library</th><th></th></tr></thead><tbody id="lb-rows"></tbody></table></div>
+      </div>
+      <p class="muted small">„Library des Tracks“ schreibt dorthin, wo der Track liegt. Eine andere Ziel-Library ordnet Tracks über Dateiname und Dateigröße zu, z.B. vom Mac auf den Prime. Klick auf einen Track spielt ihn ab.</p>
+    </section>
+
+    <section id="view-drives" class="view">
+      <h1>Laufwerke & Libraries</h1>
+      <div id="drives" class="drives"></div>
+      <div class="card">
+        <h3>Weiteren Library-Ort hinzufügen</h3>
+        <div class="row"><input id="d-root" placeholder="/Volumes/MeinStick"><button id="d-add">Hinzufügen</button></div>
+        <p class="muted">DJ FLOW findet „Engine Library“-Ordner auf dem Mac und allen angeschlossenen Laufwerken automatisch.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Player -->
+  <footer class="player">
+    <button id="p-play" class="round">▶</button>
+    <div class="p-meta"><b id="p-title">—</b><span id="p-sub" class="muted"></span></div>
+    <canvas id="p-wave" height="56"></canvas>
+    <div class="p-btns">
+      <button id="p-in" title="Ab Mix-In">⇥ In</button>
+      <button id="p-drop" title="Zum ersten Drop">◆ Drop</button>
+      <button id="p-out" title="Ab Mix-Out">⇤ Out</button>
+      <button id="p-add" title="Zum Set">＋ Set</button>
+    </div>
+    <audio id="audio" preload="none"></audio>
+  </footer>
+  <div id="toast"></div>
+</div>
+<script src="dsp.js"></script>
+<script src="app.js"></script>
+<script src="mixlab.js"></script>
+<script src="libraries.js"></script>
+</body>
+</html>
