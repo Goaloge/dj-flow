@@ -26,12 +26,14 @@ const saveSet = () => localStorage.setItem('djflow.set', JSON.stringify(S.set));
 // ---------- Navigation ----------
 $$('.nav > button[data-view]').forEach((b) => b.onclick = () => show(b.dataset.view));
 function show(v) {
+  if (v !== 'cues' && $('#view-cues').classList.contains('active')) window.CueEditor?.leave();
   $$('.nav > button[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
   $$('.view').forEach((s) => s.classList.toggle('active', s.id === `view-${v}`));
   if (v === 'set') renderSet();
   if (v === 'drives') renderDrives();
   if (v === 'libs') Libraries.init();
   if (v === 'mixlab') MixLab.render();
+  if (v === 'cues') CueEditor.show();
 }
 
 /** „uid#2“ = zweites Vorkommen desselben Tracks im Set (A–B–A): dieselben Trackdaten unter eigener Kennung */
@@ -90,7 +92,7 @@ function renderTable() {
   const rows = S.filtered.slice(0, S.limit).map((t) => `<tr data-uid="${t.uid}" class="${t.uid === S.sel ? 'sel' : ''} ${t.uid === Player.uid ? 'playing' : ''}">
     <td>${esc(t.artist)}</td><td>${esc(t.title || t.filename)}</td><td>${esc(t.genre)}</td>
     <td>${t.bpm ? t.bpm.toFixed(1) : '–'}</td><td>${keyBadge(t.camelot)}</td><td>${energyBar(t.energy)}</td>
-    <td>${fmt(t.length)}</td><td class="muted">${esc(t.volume)}</td><td class="row-btns"><button class="edit-tags" title="Tags bearbeiten (Taste E)">✎</button><button class="add" title="Zum Set">＋</button></td></tr>`).join('');
+    <td>${fmt(t.length)}</td><td class="muted">${esc(t.volume)}</td><td class="row-btns"><button class="edit-tags" title="Tags bearbeiten (Taste E)">✎</button><button class="to-cues" title="Cues & Loops setzen">◈</button><button class="add" title="Zum Set">＋</button></td></tr>`).join('');
   $('#tbl tbody').innerHTML = rows + (S.filtered.length > S.limit ? `<tr><td colspan="9" class="more"><button id="more">Weitere ${Math.min(500, S.filtered.length - S.limit)} anzeigen</button></td></tr>` : '');
   const more = $('#more'); if (more) more.onclick = () => { S.limit += 500; renderTable(); };
 }
@@ -98,6 +100,7 @@ $('#tbl tbody').addEventListener('click', (e) => {
   const tr = e.target.closest('tr[data-uid]'); if (!tr) return;
   if (e.target.classList.contains('add')) return addToSet(tr.dataset.uid);
   if (e.target.classList.contains('edit-tags')) return openTagEditor(tr.dataset.uid);
+  if (e.target.classList.contains('to-cues')) return CueEditor.open(tr.dataset.uid);
   select(tr.dataset.uid);
 });
 $('#tbl tbody').addEventListener('dblclick', (e) => { if (e.target.closest('button')) return; const tr = e.target.closest('tr[data-uid]'); if (tr) MixLab.addTrack(tr.dataset.uid, true); });

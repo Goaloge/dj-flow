@@ -2,7 +2,7 @@
 
 Set-Editor, Playlist-Generator, Tag-Editor und Mix-Analyzer für **Engine DJ**. Electron-App für macOS (Apple Silicon) und Windows x64, gebaut für elektronische Musik.
 
-Version: **1.18.0** · Ausführliche Dokumentation: Obsidian-Vault, Ordner `DJ FLOW`.
+Version: **1.19.0** · Ausführliche Dokumentation: Obsidian-Vault, Ordner `DJ FLOW`.
 
 ## Starten und bauen
 
@@ -26,7 +26,7 @@ Die Pakete sind nicht signiert (nur Ad-hoc auf dem Mac). Beim ersten Start: Mac 
 | **Playlist-Generator** | Genre, BPM, BPM-Rampe, Energiekurven, harmonischer Pfad |
 | **Set-Builder** | Reihenfolge optimieren, Export als M3U8 oder Playlist direkt in Engine |
 | **Mix-Lab** | **Auto-Mix** (ganzes Set aus Ausschnitten, z.B. 100 Songs in 60 Min, Stile automatisch, optional Rückkehr A–B–A), Timeline mit zwei Decks und Sample-Spur, Übergänge (Mischart + mehrere Effekte, auch mitten im Song: Drop-Stile wie Drop-In, Double Drop, Echo/Roll/Spinback/Filter → Drop, ausgerichtet an Cues, Loops und Abschnitten), Stem-Mix, Effekte im Song, Automation, Tempo-Spur, Key Lock, EQ, Limiter, Lautstärke-Angleich, Undo/Redo, Export WAV/FLAC/MP3 |
-| **Cues & Loops** | 8 + 8 je Track, Auto-Erkennung aus der Waveform, Zurückschreiben in die Engine-DB |
+| **Cues & Loops** | Eigener Bereich ohne Mix-Lab: Track suchen, Cues und Loops per Klick oder Taste 1–8, Loops mit fester Länge, Auto-Erkennung; 8 + 8 je Track, Auto-Erkennung aus der Waveform, Zurückschreiben in die Engine-DB |
 | **Stems** | Lokale Trennung mit Demucs in Drums, Bass, Melodie, Vocals |
 | **Tag-Doktor** | Fehlende Tags, Auto-Fix, Tags schreiben für MP3, WAV, AIFF, FLAC, Duplikate in den Papierkorb legen und wieder aufnehmen |
 | **Libraries** | Library wählen (auch die interne SSD eines Prime im Festplattenmodus), Playlists, Cue-/Loop-Status je Track, Auto-Cues & Loops für einzelne Tracks oder alle fehlenden, Ziel-Library frei wählbar |

@@ -1,6 +1,6 @@
 {
   "name": "dj-flow",
-  "version": "1.18.0",
+  "version": "1.19.0",
   "description": "DJ FLOW – intelligenter Playlist-Generator, Tag-Editor und Mix-Analyzer für Engine DJ (macOS)",
   "main": "electron/main.js",
   "type": "commonjs",

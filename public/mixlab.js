@@ -147,7 +147,7 @@
     }
     return ts.bufP;
   }
-  const isActive = (uid) => [ML.views.A?.ts?.uid, ML.views.B?.ts?.uid].includes(uid);
+  const isActive = (uid) => [ML.views.A?.ts?.uid, ML.views.B?.ts?.uid, ML.cueView?.ts?.uid].includes(uid);
 
   // 3-Band-Peaks (low < 200 Hz, mid, high > 4 kHz) per Ein-Pol-Filter
   function computePeaks(buf) {
@@ -332,7 +332,7 @@
     updateLiveEq(ts);
     clearTimeout(saveT.get(ts.uid));
     saveT.set(ts.uid, setTimeout(() => api('/api/edits', { uid: ts.uid, edit: ts.edit }), 400));
-    redrawAll(); renderPads(); renderTransPanel(); renderTimelineChips(); TL.dirty();
+    redrawAll(); renderPads(); renderCuePads(); renderTransPanel(); renderTimelineChips(); TL.dirty();
   }
   const beat = (ts) => ts.perf.grid?.beatSec || 60 / (ts.t.bpm || 128);
   const bar = (ts) => beat(ts) * 4;
@@ -535,8 +535,8 @@
     hit(px, py) {
       const ts = this.ts, e = ts.edit, H = this.cv.clientHeight, near = (s) => Math.abs(this.x(s) - px) <= 6;
       if (py >= H - 38 && py < H - 22) for (let i = e.fx.length - 1; i >= 0; i--) { const f = e.fx[i]; if (near(f.start)) return { k: 'fxStart', i }; if (near(f.end)) return { k: 'fxEnd', i }; if (px > this.x(f.start) && px < this.x(f.end)) return { k: 'fxBody', i }; }
-      if (near(e.mixIn) && py < 22) return { k: 'mixIn' };
-      if (near(e.mixOut) && py < 22) return { k: 'mixOut' };
+      if (!this.noMix && near(e.mixIn) && py < 22) return { k: 'mixIn' };
+      if (!this.noMix && near(e.mixOut) && py < 22) return { k: 'mixOut' };
       for (let i = 0; i < 8; i++) { const c = e.cues[i]; if (c && near(c.sec) && py > H - 22) return { k: 'cue', i }; }
       for (let i = 0; i < 8; i++) {
         const l = e.loops[i]; if (!l) continue;
@@ -547,8 +547,8 @@
           if (px > this.x(l.start) && px < this.x(l.end)) return { k: 'loopBody', i };
         }
       }
-      if (near(e.mixIn)) return { k: 'mixIn' };
-      if (near(e.mixOut)) return { k: 'mixOut' };
+      if (!this.noMix && near(e.mixIn)) return { k: 'mixIn' };
+      if (!this.noMix && near(e.mixOut)) return { k: 'mixOut' };
       for (let i = 0; i < 8; i++) { const c = e.cues[i]; if (c && near(c.sec)) return { k: 'cue', i }; }
       return null;
     }
@@ -607,7 +607,7 @@
         if (!drag) return;
         if (drag.mode === 'pan' && !drag.moved) {
           const s = this.sec(ev.offsetX);
-          if (this.ts) soloPlay(this.ts, s);
+          if (this.ts) { this.cursor = Math.max(0, s); soloPlay(this.ts, s); }
         }
         if (drag.dirty) changed(this.ts);
         drag = null;
@@ -747,10 +747,9 @@
         g.fillStyle = col; g.fillRect(x - 1, 0, 3, H - 20);
         const tw = g.measureText(txt).width + 10; g.fillRect(x, 0, tw, 18); g.fillStyle = '#000'; g.font = 'bold 10px -apple-system, sans-serif'; g.fillText(txt, x + 5, 13); g.font = '10px -apple-system, sans-serif';
       };
-      flag(e.mixIn, '#00e5ff', `MIX IN · T${barNo(ts, e.mixIn)}`);
-      flag(e.mixOut, '#ff2bd6', `MIX OUT · T${barNo(ts, e.mixOut)}`);
+      if (!this.noMix) { flag(e.mixIn, '#00e5ff', `MIX IN · T${barNo(ts, e.mixIn)}`); flag(e.mixOut, '#ff2bd6', `MIX OUT · T${barNo(ts, e.mixOut)}`); }
       // Playhead
-      const p = pos ?? this.playPos();
+      const p = pos ?? this.playPos() ?? this.cursor;
       if (p != null) { const x = this.x(p); g.fillStyle = '#fff'; g.fillRect(x - 1, 0, 2, H); g.fillStyle = '#ffffff22'; g.fillRect(0, 0, Math.max(0, x), 20); }
       this.drawOverview(p);
       this.scrollUpdate?.();
@@ -775,7 +774,7 @@
       const ov = ts.perf.overview; if (!ov) return;
       for (let x = 0; x < W; x++) { const [l, m] = ov[Math.floor((x / W) * ov.length)]; g.fillStyle = '#2b4fb3'; const v = (l / 255) * H * 0.45; g.fillRect(x, H / 2 - v, 1, v * 2); g.fillStyle = '#c66a00aa'; const w = (m / 255) * H * 0.3; g.fillRect(x, H / 2 - w, 1, w * 2); }
       const X = (s) => (s / ts.dur) * W;
-      g.fillStyle = '#00e5ff'; g.fillRect(X(ts.edit.mixIn), 0, 2, H); g.fillStyle = '#ff2bd6'; g.fillRect(X(ts.edit.mixOut), 0, 2, H);
+      if (!this.noMix) { g.fillStyle = '#00e5ff'; g.fillRect(X(ts.edit.mixIn), 0, 2, H); g.fillStyle = '#ff2bd6'; g.fillRect(X(ts.edit.mixOut), 0, 2, H); }
       ts.edit.cues.forEach((c) => { if (c) { g.fillStyle = c.color; g.fillRect(X(c.sec), H - 6, 2, 6); } });
       g.strokeStyle = '#ffffffaa'; g.strokeRect(X(this.start) + 0.5, 0.5, Math.max(3, (this.W * this.spp / ts.dur) * W), H - 1);
       if (pos != null) { g.fillStyle = '#fff'; g.fillRect(X(pos), 0, 1, H); }
@@ -790,7 +789,7 @@
     else { A.spp = B.spp / r; A.start = A.ts.edit.mixOut + (B.start - B.ts.edit.mixIn) / r; }
     A.draw(); B.draw();
   }
-  function redrawAll() { ML.views.A?.draw(); ML.views.B?.draw(); }
+  function redrawAll() { ML.views.A?.draw(); ML.views.B?.draw(); ML.cueView?.draw(); }
 
   // Animations-Schleife während Wiedergabe
   let raf = null;
@@ -807,6 +806,11 @@
         v.draw(p);
         const pv = ML.preview;
         drawMeter(v, pv && !pv.stopped ? (pv.A === v.ts ? meters.A : pv.B === v.ts ? meters.B : null) : solo.ts === v.ts ? meters.S : null);
+      }
+      const cv = ML.cueView;
+      if (cv?.ts && solo.ts === cv.ts) {
+        const p = soloPos();
+        if (p != null) { cv.cursor = p; const x = cv.x(p); if (x > cv.W * 0.85 || x < 0) cv.start = p - cv.W * 0.25 * cv.spp; cv.draw(p); }
       }
       if (active) raf = requestAnimationFrame(loop);
       else { for (const k of ['A', 'B']) if (ML.views[k]?.ts) drawMeter(ML.views[k], null); ML.views.A?.follow(false); ML.views.B?.follow(false); redrawAll(); }
@@ -1146,7 +1150,7 @@
       const r = await api('/api/engine/cues', { uids: dirty });
       for (const u of dirty) ML.ts.get(u).edit.dirty = false;
       for (const u of dirty) { const ts = ML.ts.get(u); ts.perf.engineCues = ts.edit.cues.slice(); ts.perf.engineLoops = ts.edit.loops.slice(); }
-      renderPads(); renderTimeline();
+      renderPads(); renderCuePads(); renderTimeline();
       toast(`✓ ${r.results.reduce((s, x) => s + x.written, 0)} Track(s) in Engine geschrieben.<br>Backup: <code>${esc(r.results[0]?.backup.split('/').pop() || '')}</code>`, 8000);
     } catch (e) { toast('⚠ ' + e.message, 7000); }
   }
@@ -2601,6 +2605,114 @@
     if (v === 'auto') await autoTransition(p.A, p.B); else await autoStyle(v, p.A, p.B);
     await TL.refresh(); showTransition(); renderBottom();
   };
+
+  // ================= Eigener Bereich „Cues & Loops“ (ohne Set und Mix-Lab) =================
+  const CE = { q: '', list: [], ts: null };
+  const CE_LOOPS = [[0.25, '1/4'], [0.5, '1/2'], [1, '1'], [2, '2'], [4, '4'], [8, '8'], [16, '16'], [32, '32']];
+  const ceActive = () => $('#view-cues').classList.contains('active');
+  function ceFilter() {
+    const words = CE.q.toLowerCase().split(/\s+/).filter(Boolean);
+    CE.list = S.tracks.filter((t) => { const h = `${t.artist} ${t.title} ${t.filename} ${t.genre}`.toLowerCase(); return words.every((w) => h.includes(w)); });
+    renderCueList();
+  }
+  function renderCueList() {
+    $('#ce-list').innerHTML = CE.list.slice(0, 300).map((t) => `<div class="ce-row ${CE.ts?.uid === t.uid ? 'sel' : ''}" data-uid="${t.uid}"><div class="ell">${esc(t.title || t.filename)}</div><div class="ell muted small">${esc(t.artist || '')} · ${t.bpm?.toFixed(0) ?? '–'} BPM · ${t.camelot ?? '–'}</div></div>`).join('') +
+      (CE.list.length > 300 ? `<p class="muted small">${(CE.list.length - 300).toLocaleString('de')} weitere – Suche eingrenzen</p>` : CE.list.length ? '' : '<p class="muted">Keine Treffer.</p>');
+  }
+  async function openCues(uid) {
+    if (!ceActive()) show('cues');
+    soloStop();
+    const ts = await getTS(uid);
+    CE.ts = ts; ts.curveMode = null; ts.fxBrush = null; // Mix-Lab-Werkzeuge hier nicht aktiv
+    $('#ce-main').classList.remove('empty');
+    $('#ce-title').innerHTML = `<b>${esc(ts.t.artist || '')} – ${esc(ts.t.title || ts.t.filename)}</b> <span class="muted">${ts.t.bpm?.toFixed(2) ?? '–'} BPM · ${ts.t.camelot ?? '–'} · ${fmt(ts.dur)}${ts.perf.grid?.beatSec ? '' : ' · ⚠ kein Beatgrid (in Engine analysieren)'}</span>`;
+    if (!ML.cueView) { ML.cueView = new WaveView($('#ce-wave'), 'cue'); ML.cueView.noMix = true; }
+    const v = ML.cueView; v.ts = ts; v.cursor = ts.edit.cues.find(Boolean)?.sec ?? fb(ts);
+    v.fit(); renderCuePads(); renderCueList();
+    loadBuffer(ts).catch(() => {});
+  }
+  function renderCuePads() {
+    const ts = CE.ts; if (!ts) return;
+    const e = ts.edit;
+    $('#ce-cues').innerHTML = '<span class="pl">CUES</span>' + e.cues.map((c, i) => `<button class="pad ${c ? 'on' : ''}" data-i="${i}" style="${c ? `--pc:${c.color}` : ''}" title="${c ? `Takt ${barNo(ts, c.sec)} · Klick = abspielen · Doppelklick = umbenennen · Rechtsklick = löschen` : 'Leer · Klick = Cue an der Abspielposition setzen'}"><b>${i + 1}</b> ${c ? esc(c.label) : ''}</button>`).join('');
+    $('#ce-loops').innerHTML = '<span class="pl">LOOPS</span>' + e.loops.map((l, i) => `<button class="pad loop ${l ? 'on' : ''}" data-i="${i}" style="${l ? `--pc:${l.color}` : ''}" title="${l ? `T${barNo(ts, l.start)} · Klick = Loop abspielen · Rechtsklick = löschen` : 'Leer · Klick = Loop an der Abspielposition setzen'}"><b>${i + 1}</b> ${l ? esc(l.label) + ' <small>' + fmtBeats((l.end - l.start) / beat(ts)) + '</small>' : ''}</button>`).join('');
+    $('#ce-state').textContent = e.dirty ? '● geändert (lokal gespeichert, noch nicht in Engine)' : 'unverändert gegenüber Engine';
+  }
+  const ceHere = () => Math.max(0, snapSec(CE.ts, (solo.ts === CE.ts ? soloPos() : null) ?? ML.cueView.cursor ?? 0));
+  function ceCue(i) {
+    const ts = CE.ts; if (!ts) return;
+    const c = ts.edit.cues[i];
+    if (c) { ML.cueView.cursor = c.sec; return soloPlay(ts, c.sec); }
+    ts.edit.cues[i] = { label: `Cue ${i + 1}`, sec: ceHere(), color: COLORS[i] }; changed(ts);
+  }
+  function ceLoop(i) {
+    const ts = CE.ts; if (!ts) return;
+    const l = ts.edit.loops[i];
+    if (l) return soloPlay(ts, l.start, l);
+    const st = ceHere(); ts.edit.loops[i] = { label: `Loop ${i + 1}`, start: st, end: st + ML.loopLen * beat(ts), color: COLORS[i] }; changed(ts);
+  }
+  /** Loop mit fester Länge in den nächsten freien Platz und gleich abspielen */
+  function ceNewLoop(beats) {
+    const ts = CE.ts; if (!ts) return;
+    ML.loopLen = beats; $('#ml-looplen').value = String(beats);
+    const i = ts.edit.loops.indexOf(null); if (i < 0) return toast('Alle 8 Loop-Plätze belegt (Rechtsklick auf einen Platz löscht ihn)');
+    const st = ceHere(); ts.edit.loops[i] = { label: `Loop ${i + 1}`, start: st, end: st + beats * beat(ts), color: COLORS[i] }; changed(ts);
+    soloPlay(ts, st, ts.edit.loops[i]);
+  }
+  async function ceAuto(what) {
+    const ts = CE.ts; if (!ts) return;
+    if (!ts.perf.auto) return toast('Kein Beatgrid – bitte erst in Engine DJ analysieren');
+    const kinds = what === 'both' ? ['cues', 'loops'] : [what];
+    const has = kinds.some((k) => ts.edit[k].some(Boolean));
+    const replace = !has || confirm('Es gibt schon Einträge.\n\nOK = alle durch die Auto-Erkennung ersetzen\nAbbrechen = nur freie Plätze füllen');
+    const keep = { mixIn: ts.edit.mixIn, mixOut: ts.edit.mixOut, cues: ts.edit.cues.slice(), loops: ts.edit.loops.slice() };
+    await applyAuto(ts, replace ? 'all' : 'fill');
+    ts.edit.mixIn = keep.mixIn; ts.edit.mixOut = keep.mixOut; // Mix-Punkte gehören ins Mix-Lab
+    for (const k of ['cues', 'loops']) if (!kinds.includes(k)) ts.edit[k] = keep[k];
+    changed(ts);
+  }
+  let ceT; $('#ce-q').oninput = (e) => { clearTimeout(ceT); ceT = setTimeout(() => { CE.q = e.target.value; ceFilter(); }, 150); };
+  $('#ce-list').onclick = (e) => { const r = e.target.closest('.ce-row'); if (r) openCues(r.dataset.uid); };
+  $('#ce-snap').innerHTML = $('#ml-snap').innerHTML;
+  $('#ce-snap').onchange = (e) => { $('#ml-snap').value = e.target.value; $('#ml-snap').dispatchEvent(new Event('change')); };
+  $('#ce-looplen').innerHTML = '<span class="muted small">Loop (Beats):</span>' + CE_LOOPS.map(([b, n]) => `<button data-b="${b}">${n}</button>`).join('');
+  $('#ce-looplen').onclick = (e) => { const b = e.target.dataset.b; if (b) ceNewLoop(+b); };
+  $('#ce-play').onclick = () => { if (!CE.ts) return; if (solo.src) soloStop(); else soloPlay(CE.ts, ML.cueView.cursor || 0); };
+  $('#ce-zin').onclick = () => CE.ts && ML.cueView.zoomTo(ceHere(), ML.cueView.spp * 0.5);
+  $('#ce-zout').onclick = () => CE.ts && ML.cueView.zoomBy(2);
+  $('#ce-fit').onclick = () => CE.ts && ML.cueView.fit();
+  $('#ce-auto').onclick = () => ceAuto('both');
+  $('#ce-auto-cues').onclick = () => ceAuto('cues');
+  $('#ce-auto-loops').onclick = () => ceAuto('loops');
+  $('#ce-revert').onclick = () => {
+    const ts = CE.ts; if (!ts || !confirm('Cues und Loops dieses Tracks auf den Stand aus Engine zurücksetzen?')) return;
+    const pad8 = (a) => Array.from({ length: 8 }, (_, i) => a?.[i] || null);
+    ts.edit.cues = pad8(ts.perf.engineCues); ts.edit.loops = pad8(ts.perf.engineLoops); changed(ts);
+    ts.edit.dirty = false; api('/api/edits', { uid: ts.uid, edit: ts.edit }); renderCuePads();
+  };
+  $('#ce-write').onclick = () => CE.ts && writeEngine([CE.ts.uid]);
+  for (const [id, kind, use] of [['#ce-cues', 'cues', ceCue], ['#ce-loops', 'loops', ceLoop]]) {
+    $(id).onclick = (e) => { const p = e.target.closest('.pad'); if (p && e.detail < 2) use(+p.dataset.i); };
+    $(id).oncontextmenu = (e) => { const p = e.target.closest('.pad.on'); if (!p) return; e.preventDefault(); soloStop(); CE.ts.edit[kind][+p.dataset.i] = null; changed(CE.ts); };
+    $(id).ondblclick = async (e) => {
+      const p = e.target.closest('.pad.on'); if (!p) return;
+      const item = CE.ts.edit[kind][+p.dataset.i]; soloStop();
+      const name = await askText('Name:', item.label); if (name == null) return;
+      item.label = name.slice(0, 40); changed(CE.ts);
+    };
+  }
+  document.addEventListener('keydown', (e) => {
+    if (!ceActive() || e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+    const done = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+    const n = /^Digit([1-8])$/.exec(e.code);
+    if (e.code === 'Space') { done(); $('#ce-play').click(); }
+    else if (n) { done(); (e.shiftKey ? ceLoop : ceCue)(+n[1] - 1); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      done(); const t = CE.list[CE.list.findIndex((x) => x.uid === CE.ts?.uid) + (e.key === 'ArrowDown' ? 1 : -1)];
+      if (t) openCues(t.uid).then(() => $(`.ce-row[data-uid="${CSS.escape(t.uid)}"]`)?.scrollIntoView({ block: 'nearest' }));
+    }
+  }, true);
+  window.CueEditor = { show: ceFilter, open: openCues, leave: () => soloStop(), _state: CE };
 
   H.ui();
   setBottom('transition');

@@ -14,6 +14,7 @@
     <button data-view="generator">✦ Playlist-Generator</button>
     <button data-view="set">≡ Set-Builder</button>
     <button data-view="mixlab">⇄ Mix-Lab</button>
+    <button data-view="cues">◈ Cues &amp; Loops</button>
     <button data-view="tags">✎ Tag-Doktor</button>
     <button data-view="libs">◫ Libraries</button>
     <button data-view="drives">⛁ Laufwerke</button>
@@ -138,6 +139,35 @@
       <nav class="st-tabs">
         <button class="ml-btab" data-tab="transition">⇄ Übergang</button><button class="ml-btab" data-tab="track">〰 Track &amp; Cues</button><button class="ml-btab" data-tab="list">≡ Trackliste</button><button class="ml-btab" data-tab="stems">▥ Stems</button><button class="ml-btab" data-tab="export">⇩ Export</button>
       </nav>
+    </section>
+
+    <!-- CUES & LOOPS -->
+    <section id="view-cues" class="view">
+      <div class="ce-side">
+        <input id="ce-q" placeholder="Track suchen …">
+        <div id="ce-list"></div>
+      </div>
+      <div id="ce-main" class="empty">
+        <p class="ce-hint muted">Links einen Track wählen.</p>
+        <div id="ce-title"></div>
+        <div class="ce-bar">
+          <button id="ce-play" class="primary" title="Leertaste">▶ / ■</button>
+          <button id="ce-zout">－</button><button id="ce-zin">＋</button><button id="ce-fit">Ganz</button>
+          <label class="tl-l">Snap <select id="ce-snap"></select></label>
+          <span class="sep"></span>
+          <button id="ce-auto" title="Aus Waveform und Beatgrid erkennen">✦ Auto Cues &amp; Loops</button>
+          <button id="ce-auto-cues">✦ nur Cues</button><button id="ce-auto-loops">✦ nur Loops</button>
+        </div>
+        <div id="ce-wave" class="ml-wave"></div>
+        <div id="ce-looplen" class="ce-bar"></div>
+        <div class="ml-pads"><div id="ce-cues" class="pads"></div><div id="ce-loops" class="pads"></div></div>
+        <div class="ce-bar">
+          <button id="ce-write" class="primary">⇪ In Engine DJ schreiben</button>
+          <button id="ce-revert" class="ghost">↺ Stand aus Engine</button>
+          <span id="ce-state" class="muted small"></span>
+        </div>
+        <p class="muted small">Klick in die Waveform spielt ab dort · Mausrad = Zoom · Doppelklick = Cue · Alt+Ziehen = Loop · Marker ziehen · Rechtsklick löscht · Tasten 1–8 = Cue, Umschalt+1–8 = Loop, ↑↓ = Track wechseln</p>
+      </div>
     </section>
 
     <!-- TAG DOCTOR -->
