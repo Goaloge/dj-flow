@@ -2610,15 +2610,87 @@
   const CE = { q: '', list: [], ts: null };
   const CE_LOOPS = [[0.25, '1/4'], [0.5, '1/2'], [1, '1'], [2, '2'], [4, '4'], [8, '8'], [16, '16'], [32, '32']];
   const ceActive = () => $('#view-cues').classList.contains('active');
+  // Quelle der Liste: alle Tracks, eine Library oder eine Playlist
+  CE.sel = new Set(); CE.rows = null; CE.lib = ''; CE.pl = ''; CE.libs = null; CE.job = false;
+  const cePill = (n) => `<span class="lb-n ${n === 0 ? 'zero' : n >= 8 ? 'full' : ''}">${n}</span>`;
   function ceFilter() {
     const words = CE.q.toLowerCase().split(/\s+/).filter(Boolean);
-    CE.list = S.tracks.filter((t) => { const h = `${t.artist} ${t.title} ${t.filename} ${t.genre}`.toLowerCase(); return words.every((w) => h.includes(w)); });
+    CE.list = (CE.rows || S.tracks).filter((t) => { const h = `${t.artist} ${t.title} ${t.filename || ''} ${t.genre}`.toLowerCase(); return words.every((w) => h.includes(w)); });
     renderCueList();
   }
   function renderCueList() {
-    $('#ce-list').innerHTML = CE.list.slice(0, 300).map((t) => `<div class="ce-row ${CE.ts?.uid === t.uid ? 'sel' : ''}" data-uid="${t.uid}"><div class="ell">${esc(t.title || t.filename)}</div><div class="ell muted small">${esc(t.artist || '')} · ${t.bpm?.toFixed(0) ?? '–'} BPM · ${t.camelot ?? '–'}</div></div>`).join('') +
-      (CE.list.length > 300 ? `<p class="muted small">${(CE.list.length - 300).toLocaleString('de')} weitere – Suche eingrenzen</p>` : CE.list.length ? '' : '<p class="muted">Keine Treffer.</p>');
+    $('#ce-list').innerHTML = CE.list.slice(0, 300).map((t) => `<div class="ce-row ${CE.ts?.uid === t.uid ? 'sel' : ''}" data-uid="${t.uid}"><input type="checkbox" ${CE.sel.has(t.uid) ? 'checked' : ''} title="Für den Stapellauf auswählen"><div class="ce-t"><div class="ell">${esc(t.title || t.filename)}</div><div class="ell muted small">${esc(t.artist || '')} · ${t.bpm?.toFixed(0) ?? '–'} BPM · ${t.camelot ?? '–'}</div></div>${t.cues != null ? `<span class="ce-n" title="Cues / Loops in Engine">${cePill(t.cues)}${cePill(t.loops)}</span>` : ''}</div>`).join('') +
+      (CE.list.length > 300 ? `<p class="muted small">${(CE.list.length - 300).toLocaleString('de')} weitere – Suche eingrenzen („alle“ wählt auch sie)</p>` : CE.list.length ? '' : '<p class="muted">Keine Treffer.</p>');
+    ceBatchUi();
   }
+  function ceBatchUi() {
+    const n = CE.sel.size;
+    $('#ce-all').checked = CE.list.length > 0 && CE.list.every((t) => CE.sel.has(t.uid));
+    $('#ce-count').textContent = `${n.toLocaleString('de')} gewählt`;
+    $('#ce-run').textContent = `✦ Stapel: ${n.toLocaleString('de')} Track${n === 1 ? '' : 's'}`;
+    $('#ce-run').disabled = !n || CE.job; $('#ce-stop').style.display = CE.job ? '' : 'none';
+  }
+  async function ceShow() {
+    if (!CE.libs) {
+      CE.libs = (await api('/api/lib/list')).filter((l) => l.trackCount);
+      const opt = (l) => `<option value="${l.id}">${esc(l.volume)}${l.device ? ' (Gerät)' : ''} · ${l.trackCount.toLocaleString('de')}</option>`;
+      $('#ce-lib').innerHTML = '<option value="">Alle Tracks (nur Suche)</option>' + CE.libs.map(opt).join('');
+      $('#ce-target').innerHTML = '<option value="">in die Library des Tracks</option>' + CE.libs.map((l) => `<option value="${l.id}">nach ${esc(l.volume)}${l.device ? ' (Gerät)' : ''}</option>`).join('');
+    }
+    ceFilter();
+  }
+  /** Zeilen der gewählten Quelle laden (mit Cue-/Loop-Anzahl) */
+  async function ceLoad() {
+    const lib = CE.lib, pl = CE.pl;
+    let rows = null;
+    if (lib) {
+      $('#ce-list').innerHTML = '<p class="muted">Lese Tracks …</p>';
+      rows = pl === '' ? await api('/api/lib/tracks?lib=' + encodeURIComponent(lib)) : (await api(`/api/lib/playlist?lib=${encodeURIComponent(lib)}&id=${pl}`)).tracks;
+      rows = [...new Map(rows.map((r) => [r.uid, r])).values()];
+    }
+    if (lib !== CE.lib || pl !== CE.pl) return; // inzwischen umgeschaltet
+    CE.rows = rows; ceFilter();
+  }
+  $('#ce-lib').onchange = async (e) => {
+    CE.lib = e.target.value; CE.pl = ''; CE.sel.clear();
+    const flat = (nodes, d) => nodes.flatMap((p) => [`<option value="${p.id}">${'  '.repeat(d)}${esc(p.title)}${p.count ? ' (' + p.count + ')' : ''}</option>`, ...flat(p.children, d + 1)]);
+    $('#ce-pl').style.display = CE.lib ? '' : 'none';
+    if (CE.lib) $('#ce-pl').innerHTML = '<option value="">Ganze Library</option>' + flat(await api('/api/lib/playlists?lib=' + encodeURIComponent(CE.lib)), 0).join('');
+    await ceLoad();
+  };
+  $('#ce-pl').onchange = async (e) => { CE.pl = e.target.value; CE.sel.clear(); await ceLoad(); };
+  $('#ce-all').onchange = (e) => { for (const t of CE.list) e.target.checked ? CE.sel.add(t.uid) : CE.sel.delete(t.uid); renderCueList(); };
+  $('#ce-stop').onclick = () => { CE.stopped = true; api('/api/lib/stop', {}); };
+  $('#ce-run').onclick = async () => {
+    const uids = [...CE.sel]; if (!uids.length || CE.job) return;
+    const kinds = $('#ce-kinds').value, mode = $('#ce-mode').value, target = $('#ce-target').value;
+    const dev = CE.libs.filter((l) => l.device && (target ? l.id === target : uids.some((u) => u.startsWith(l.id + ':'))));
+    const what = { both: 'Cues und Loops', cues: 'Cues', loops: 'Loops' }[kinds];
+    if (!confirm(`${uids.length.toLocaleString('de')} Track(s): ${what} automatisch setzen und direkt in die Engine-Datenbank schreiben?\n\n${mode === 'all' ? `Vorhandene ${what} werden ERSETZT.` : 'Nur freie Plätze werden gefüllt, Vorhandenes bleibt.'}\nZiel: ${target ? CE.libs.find((l) => l.id === target).volume : 'Library des jeweiligen Tracks'}\n\nEngine DJ muss geschlossen sein${dev.length ? ', das Prime-Gerät darf nicht laufen' : ''}. Vorher entsteht ein Backup der Datenbank.`)) return;
+    const byLib = new Map();
+    for (const u of uids) { const [l, id] = u.split(':'); if (!byLib.has(l)) byLib.set(l, []); byLib.get(l).push(+id); }
+    CE.job = true; CE.stopped = false; ceBatchUi(); soloStop();
+    let written = 0, kept = 0; const skip = { noGrid: 0, noMatch: 0, nothing: 0 }; let error = null;
+    try {
+      for (const [lib, ids] of byLib) {
+        if (CE.stopped) break;
+        await api('/api/lib/auto', { lib, target: target || lib, ids, mode, kinds });
+        for (;;) {
+          const j = await api('/api/lib/job');
+          $('#ce-job').textContent = `${j.phase} … ${j.done.toLocaleString('de')}/${j.total.toLocaleString('de')}`;
+          if (!j.running) { if (j.error) throw new Error(j.error); written += j.written; kept += j.localKept || 0; for (const k in skip) skip[k] += j.skip?.[k] || 0; break; }
+          await new Promise((r) => setTimeout(r, 300));
+        }
+      }
+    } catch (e) { error = e.message; }
+    CE.job = false;
+    const parts = [skip.nothing && `${skip.nothing} schon vollständig`, skip.noGrid && `${skip.noGrid} ohne Beatgrid`, skip.noMatch && `${skip.noMatch} ohne passenden Track im Ziel`, kept && `${kept} mit eigenen, noch nicht geschriebenen Änderungen (Anzeige unverändert)`].filter(Boolean);
+    $('#ce-job').textContent = error ? '⚠ ' + error : `✓ ${written.toLocaleString('de')} Track(s) geschrieben${parts.length ? ' · ' + parts.join(', ') : ''}${CE.stopped ? ' · abgebrochen' : ''}`;
+    if (error) toast('⚠ ' + esc(error), 8000);
+    const touched = target ? [...ML.ts.keys()].filter((u) => u.startsWith(target + ':')) : uids;
+    await ceForget(touched);
+    await ceLoad();
+  };
   async function openCues(uid) {
     if (!ceActive()) show('cues');
     soloStop();
@@ -2672,7 +2744,11 @@
     changed(ts);
   }
   let ceT; $('#ce-q').oninput = (e) => { clearTimeout(ceT); ceT = setTimeout(() => { CE.q = e.target.value; ceFilter(); }, 150); };
-  $('#ce-list').onclick = (e) => { const r = e.target.closest('.ce-row'); if (r) openCues(r.dataset.uid); };
+  $('#ce-list').onclick = (e) => {
+    const r = e.target.closest('.ce-row'); if (!r) return;
+    if (e.target.matches('input')) { e.target.checked ? CE.sel.add(r.dataset.uid) : CE.sel.delete(r.dataset.uid); e.target.blur(); return ceBatchUi(); }
+    openCues(r.dataset.uid);
+  };
   $('#ce-snap').innerHTML = $('#ml-snap').innerHTML;
   $('#ce-snap').onchange = (e) => { $('#ml-snap').value = e.target.value; $('#ml-snap').dispatchEvent(new Event('change')); };
   $('#ce-looplen').innerHTML = '<span class="muted small">Loop (Beats):</span>' + CE_LOOPS.map(([b, n]) => `<button data-b="${b}">${n}</button>`).join('');
@@ -2712,7 +2788,14 @@
       if (t) openCues(t.uid).then(() => $(`.ce-row[data-uid="${CSS.escape(t.uid)}"]`)?.scrollIntoView({ block: 'nearest' }));
     }
   }, true);
-  window.CueEditor = { show: ceFilter, open: openCues, leave: () => soloStop(), _state: CE };
+  /** Nach einem Stapellauf: zwischengespeicherte Tracks neu von Engine laden (eigene offene Änderungen bleiben) */
+  async function ceForget(uids) {
+    soloStop();
+    for (const u of uids) { const ts = ML.ts.get(u); if (ts && !ts.edit.dirty) ML.ts.delete(u); }
+    TL.dirty();
+    if (CE.ts && uids.includes(CE.ts.uid)) await openCues(CE.ts.uid);
+  }
+  window.CueEditor = { show: () => ceShow(), open: openCues, leave: () => soloStop(), _state: CE };
 
   H.ui();
   setBottom('transition');

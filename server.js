@@ -160,6 +160,20 @@ function drives() {
 // ---------- Routen ----------
 let RENDER = null;
 const FILE_OK = new Map(); // Zwischenspeicher: Datei vorhanden?
+/** Nach einem Stapellauf: lokal gespeicherte Bearbeitungen an den neuen Engine-Stand angleichen.
+ *  Noch nicht geschriebene eigene Änderungen (dirty) bleiben unangetastet; Rückgabe = deren Anzahl. */
+function syncLocalEdits(lib, entries) {
+  const edits = editsStore.load(); let kept = 0, changed = false;
+  for (const e of entries) {
+    const ed = edits[`${lib.id}:${e.trackId}`];
+    if (!ed) continue;
+    if (ed.dirty) { kept++; continue; }
+    ed.cues = e.cues; ed.loops = e.loops; changed = true;
+  }
+  if (changed) editsStore.save(edits);
+  return kept;
+}
+
 const routes = {
   'GET /api/status': () => ({ ffmpeg: !!decode.find(), tracks: TRACKS.length, libraries: LIBS, engineRunning: engine.engineIsRunning(), settings: settingsStore.load() }),
   'GET /api/tracks': () => TRACKS.map(slim),
@@ -383,18 +397,19 @@ const routes = {
     let ids = b.ids;
     if (!ids) { const st = libtools.cueStats(src); ids = (LIBROWS.get(src.id) || []).map((t) => t.id).filter((i) => !st[i] || st[i][0] === 0 || st[i][1] === 0); }
     const mode = b.mode === 'all' ? 'all' : 'fill';
+    const kinds = ['cues', 'loops'].includes(b.kinds) ? b.kinds : 'both';
     if (b.dry) return { tracks: ids.length };
     if (engine.engineIsRunning()) throw new Error('Engine DJ läuft – bitte schließen.');
     // Feinkorrektur nur auf ausdrücklichen Wunsch: gemessen lagen die Beatgrid-Positionen näher am Einschlag (Median 16 statt 33 ms)
     const refine = b.refine === true;
-    const job = LIBJOB = { running: true, phase: refine ? 'Berechne und verfeinere' : 'Berechne', done: 0, total: ids.length, target: dst.dir, written: 0, skip: { noGrid: 0, noMatch: 0, nothing: 0 }, refined: 0, noFile: 0, shifts: [], backup: null, stop: false };
+    const job = LIBJOB = { running: true, phase: refine ? 'Berechne und verfeinere' : 'Berechne', done: 0, total: ids.length, target: dst.dir, written: 0, skip: { noGrid: 0, noMatch: 0, nothing: 0 }, refined: 0, noFile: 0, shifts: [], backup: null, stop: false, localKept: 0 };
     (async () => {
       try {
         // Paketweise: Abbrechen behält bereits geschriebene Pakete
         const CHUNK = refine ? 200 : 2000;
         for (let o = 0; o < ids.length && !job.stop; o += CHUNK) {
           const part = ids.slice(o, o + CHUNK), base = job.done;
-          const plan = await libtools.planAuto(src, dst, part, mode, refine ? null : (d) => { job.done = base + d; });
+          const plan = await libtools.planAuto(src, dst, part, mode, refine ? null : (d) => { job.done = base + d; }, kinds);
           for (const k of ['noGrid', 'noMatch', 'nothing']) job.skip[k] += plan.skip[k];
           if (refine && plan.entries.length) {
             let n = 0; const skipped = part.length - plan.entries.length;
@@ -408,6 +423,7 @@ const routes = {
             const r = engine.writeCuesLoops(dst, plan.entries, { backup: !BACKED_UP.has(dst.id) });
             if (r.backup) { BACKED_UP.add(dst.id); job.backup = r.backup; }
             job.written += r.written;
+            job.localKept += syncLocalEdits(dst, plan.entries);
           }
         }
         const sh = job.shifts.map(Math.abs).sort((x, y) => x - y);

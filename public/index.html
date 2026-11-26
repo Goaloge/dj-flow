@@ -144,8 +144,18 @@
     <!-- CUES & LOOPS -->
     <section id="view-cues" class="view">
       <div class="ce-side">
+        <select id="ce-lib"><option value="">Alle Tracks (nur Suche)</option></select>
+        <select id="ce-pl" style="display:none"></select>
         <input id="ce-q" placeholder="Track suchen …">
+        <div class="ce-bar"><label class="check"><input type="checkbox" id="ce-all"> alle</label><span id="ce-count" class="muted small"></span></div>
         <div id="ce-list"></div>
+        <div class="ce-batch">
+          <select id="ce-kinds"><option value="both">Cues und Loops</option><option value="cues">nur Cues</option><option value="loops">nur Loops</option></select>
+          <select id="ce-mode"><option value="fill">nur freie Plätze füllen</option><option value="all">Vorhandenes ersetzen</option></select>
+          <select id="ce-target"><option value="">in die Library des Tracks</option></select>
+          <div class="ce-bar"><button id="ce-run" class="primary" disabled>✦ Stapel</button><button id="ce-stop" class="ghost" style="display:none">Abbrechen</button></div>
+          <div id="ce-job" class="small s-hi"></div>
+        </div>
       </div>
       <div id="ce-main" class="empty">
         <p class="ce-hint muted">Links einen Track wählen.</p>
